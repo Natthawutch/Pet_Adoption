@@ -1,23 +1,20 @@
-import Ionicons from "@expo/vector-icons/Ionicons";
-import MaterialIcons from "@expo/vector-icons/MaterialIcons";
-import { Image } from "expo-image";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { useNavigation } from "@react-navigation/native";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Modal,
-  Pressable,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
-import defaultAvatar from "../../assets/images/user.png";
 import { supabase } from "../../config/supabaseClient";
 
 export default function Header() {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
-  const [showMenu, setShowMenu] = useState(false);
+  const [inboxCount, setInboxCount] = useState(2);
+  const navigation = useNavigation();
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -66,54 +63,47 @@ export default function Header() {
     };
   }, []);
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    setShowMenu(false);
-  };
-
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="small" />
+        <ActivityIndicator size="small" color="#555" />
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
-      {/* รูป user พร้อมเมนูเมื่อกด */}
-      <TouchableOpacity onPress={() => setShowMenu(true)}>
-        <Image
-          source={user?.avatar_url ? { uri: user.avatar_url } : defaultAvatar}
-          style={styles.avatar}
-        />
-      </TouchableOpacity>
+      {/* ซ้าย: ชื่อแอป */}
 
-      {/* ไอคอนทางขวา */}
-      <View style={styles.iconsContainer}>
-        <Ionicons name="heart-outline" size={30} color="black" />
-        <MaterialIcons name="help-outline" size={30} color="black" />
-      </View>
+      <Text style={styles.appTitle}>Stray Dog Care</Text>
 
-      {/* Modal เมนู Logout */}
-      <Modal
-        transparent={true}
-        visible={showMenu}
-        animationType="fade"
-        onRequestClose={() => setShowMenu(false)}
-      >
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => setShowMenu(false)}
+      {/* ขวา: Favorites + Inbox */}
+      <View style={styles.rightIcons}>
+        <TouchableOpacity
+          style={styles.icon}
+          onPress={() => navigation.navigate("Favorite/favorite")}
         >
-          <View style={styles.menuBox}>
-            {user && <Text style={styles.userName}>{user.full_name}</Text>}
-            <Pressable onPress={handleLogout}>
-              <Text style={styles.logoutButton}>Logout</Text>
-            </Pressable>
-          </View>
-        </Pressable>
-      </Modal>
+          <Ionicons name="heart-outline" size={26} color="#333" />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.icon}
+          onPress={() => navigation.navigate("Inbox/inbox")}
+        >
+          <MaterialCommunityIcons
+            name="facebook-messenger"
+            size={26}
+            color="#333"
+          />
+          {inboxCount > 0 && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>
+                {inboxCount > 9 ? "9+" : inboxCount}
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -123,46 +113,45 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingTop: 25,
-    paddingLeft: 5,
-    paddingRight: 10,
+    paddingTop: 30,
+    paddingHorizontal: 5,
+    backgroundColor: "#fff",
+    borderBottomWidth: 1,
+    borderColor: "#eee",
   },
   loadingContainer: {
-    flexDirection: "row",
+    height: 80,
     justifyContent: "center",
     alignItems: "center",
-    height: 80,
   },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 99,
-  },
-  iconsContainer: {
-    flexDirection: "row",
-    gap: 5,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.2)",
-    justifyContent: "flex-start",
-    alignItems: "flex-start",
-    paddingTop: 70,
-    paddingLeft: 10,
-  },
-  menuBox: {
-    backgroundColor: "#fff",
-    padding: 15,
-    borderRadius: 10,
-    elevation: 5,
-  },
-  userName: {
-    fontSize: 16,
-    marginBottom: 10,
+  appTitle: {
+    fontSize: 20,
     fontWeight: "bold",
+    color: "#1e1e1e",
   },
-  logoutButton: {
-    fontSize: 16,
-    color: "red",
+  rightIcons: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  icon: {
+    position: "relative",
+    padding: 5,
+  },
+  badge: {
+    position: "absolute",
+    top: -4,
+    right: -4,
+    backgroundColor: "#e63946",
+    borderRadius: 10,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    minWidth: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  badgeText: {
+    color: "white",
+    fontSize: 10,
+    fontWeight: "bold",
   },
 });

@@ -4,13 +4,16 @@ export default {
   expo: {
     name: "pet-adoption-app",
     slug: "pet-adoption-app",
-    owner: "apmc581", // ✅ แก้ให้ตรงกับ Expo username ของคุณ
+    owner: "apmc581",
     version: "1.0.0",
     orientation: "portrait",
-    scheme: "petadoption",
     icon: "./assets/images/icon.png",
     userInterfaceStyle: "automatic",
     newArchEnabled: true,
+    
+    // ✅ เพิ่มบรรทัดนี้
+    scheme: "petadoption",
+
     ios: {
       supportsTablet: true,
     },
@@ -20,19 +23,6 @@ export default {
         backgroundColor: "#ffffff",
       },
       edgeToEdgeEnabled: true,
-      intentFilters: [
-        {
-          action: "VIEW",
-          data: [
-            {
-              scheme: "https",
-              host: "auth.expo.io",
-              pathPrefix: "/@apmc581/pet-adoption-app", // ✅ แก้ให้ตรง
-            },
-          ],
-          category: ["BROWSABLE", "DEFAULT"],
-        },
-      ],
     },
     web: {
       bundler: "metro",

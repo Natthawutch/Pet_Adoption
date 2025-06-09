@@ -31,10 +31,11 @@ export default function Petlistbycatgory() {
       <FlatList
         data={petList}
         style={{ marginTop: 10 }}
-        horizontal={true}
+        horizontal={false}
         refreshing={loader}
         onRefresh={() => GetPetList("Dogs")} // โหลดหมวดหมู่เริ่มต้น
         keyExtractor={(item, index) => index.toString()}
+        numColumns={2}
         renderItem={({ item }) => <Petlistitem pet={item} />}
       />
     </View>

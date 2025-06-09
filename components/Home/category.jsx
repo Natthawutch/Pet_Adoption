@@ -1,4 +1,3 @@
-import { collection, getDocs } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import {
   FlatList,
@@ -8,10 +7,11 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { db } from "../../config/FirebaseConfig";
+import { supabase } from "../../config/supabaseClient"; // ต้องสร้างไฟล์นี้ให้เชื่อม Supabase
 import Colors from "../../constants/Colors";
 
 export default function Category({ category }) {
+  
   const [categoryList, setCategories] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState("Dogs");
 
@@ -20,11 +20,21 @@ export default function Category({ category }) {
   }, []);
 
   const GetCategories = async () => {
-    setCategories([]);
-    const snapshot = await getDocs(collection(db, "Category"));
-    snapshot.forEach((doc) => {
-      setCategories((prevList) => [...prevList, doc.data()]);
-    });
+    const { data, error } = await supabase.from("category").select("*");
+
+    if (error) {
+      console.error("Error fetching categories:", error.message);
+      return;
+    }
+
+    if (data) {
+      const desiredOrder = ["Dogs", "Cats", "Birds", "Rabbits"];
+      const sortedData = desiredOrder
+        .map((name) => data.find((item) => item.name === name))
+        .filter(Boolean); // กรอง null เผื่อมีชื่อไม่ตรง
+
+      setCategories(sortedData);
+    }
   };
 
   return (
@@ -41,7 +51,7 @@ export default function Category({ category }) {
             <TouchableOpacity
               onPress={() => {
                 setSelectedCategory(item?.name);
-                category(item?.name); // เรียก callback
+                category(item?.name); // callback
               }}
               style={[
                 styles.container,
@@ -50,7 +60,7 @@ export default function Category({ category }) {
               ]}
             >
               <Image
-                source={{ uri: item?.imageUrl }}
+                source={{ uri: item?.imageurl }}
                 style={{ width: 40, height: 40 }}
               />
             </TouchableOpacity>

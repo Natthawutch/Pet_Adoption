@@ -1,17 +1,24 @@
 import { Image } from "expo-image";
-import { collection, getDocs } from "firebase/firestore";
 import { useEffect, useRef, useState } from "react";
-import { Dimensions, FlatList, StyleSheet, View } from "react-native";
+import {
+  ActivityIndicator,
+  Dimensions,
+  FlatList,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 
-import { db } from "../../config/FirebaseConfig";
+import { supabase } from "../../config/supabaseClient"; // import supabase client ของคุณ
 
 export default function Slider() {
   const [sliderList, setSliderList] = useState([]);
   const flatListRef = useRef(null);
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    GetSlider();
+    fetchSliders();
   }, []);
 
   useEffect(() => {
@@ -24,21 +31,59 @@ export default function Slider() {
       flatListRef.current?.scrollToIndex({
         index: nextIndex,
         animated: true,
+        viewPosition: 0.5,
       });
-    }, 4000); // 4 วินาที
+    }, 4000);
 
     return () => clearInterval(interval);
   }, [currentIndex, sliderList]);
 
-  const GetSlider = async () => {
-    setSliderList([]);
-    const snapshot = await getDocs(collection(db, "Sliders"));
-    const sliders = snapshot.docs.map((doc) => doc.data());
-    setSliderList(sliders);
+  const fetchSliders = async () => {
+    try {
+      setLoading(true);
+      // ดึงข้อมูลจาก Supabase
+      const { data, error } = await supabase.from("sliders").select("imageurl");
+      if (error) {
+        console.error("Error fetching sliders: ", error);
+      } else {
+        setSliderList(data || []);
+      }
+    } catch (error) {
+      console.error("Unexpected error: ", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
+  const renderItem = ({ item }) => (
+    <View style={{ width: Dimensions.get("window").width }}>
+      <Image
+        source={{ uri: item?.imageurl }} // ใช้ชื่อเหมือนฐานข้อมูลเลย
+        style={styles.sliderImage}
+        contentFit="cover"
+        transition={1000}
+      />
+    </View>
+  );
+
+  if (loading) {
+    return (
+      <View style={[styles.loadingContainer, { height: 170 }]}>
+        <ActivityIndicator size="large" color="#555" />
+      </View>
+    );
+  }
+
+  if (sliderList.length === 0) {
+    return (
+      <View style={[styles.loadingContainer, { height: 170 }]}>
+        <Text style={{ color: "#555" }}>ไม่มีรูปภาพสำหรับแสดง</Text>
+      </View>
+    );
+  }
+
   return (
-    <View style={{ marginTop: 15 }}>
+    <View style={{ marginTop: 15, paddingHorizontal: 10 }}>
       <FlatList
         ref={flatListRef}
         data={sliderList}
@@ -46,15 +91,8 @@ export default function Slider() {
         showsHorizontalScrollIndicator={false}
         pagingEnabled
         keyExtractor={(_, index) => index.toString()}
-        renderItem={({ item }) => (
-          <View>
-            <Image
-              source={{ uri: item?.imageUrl }}
-              style={styles.sliderImage}
-              contentFit="cover"
-            />
-          </View>
-        )}
+        renderItem={renderItem}
+        onScrollToIndexFailed={() => {}}
       />
     </View>
   );
@@ -62,9 +100,23 @@ export default function Slider() {
 
 const styles = StyleSheet.create({
   sliderImage: {
-    width: Dimensions.get("window").width * 1.2,
-    height: 170,
+    width: Dimensions.get("window").width,
+    height: 120,
     borderRadius: 15,
-    marginRight: 10,
+  },
+  loadingContainer: {
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  pagination: {
+    flexDirection: "row",
+    justifyContent: "center",
+    marginTop: 8,
+  },
+  dotActive: {
+    backgroundColor: "#333",
+  },
+  dotInactive: {
+    backgroundColor: "#ccc",
   },
 });

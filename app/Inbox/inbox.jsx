@@ -1,14 +1,18 @@
+import { Ionicons } from "@expo/vector-icons"; // import ไอคอนจาก expo vector icons
+import { useNavigation } from "@react-navigation/native";
+import { useRouter } from "expo-router"; // <-- นำเข้า useRouter
 import { useEffect, useState } from "react";
-import { FlatList, Text, View } from "react-native";
+import { FlatList, Text, TouchableOpacity, View } from "react-native";
 import UserItem from "../../components/Inbox/UserItem";
 import { supabase } from "../../config/supabaseClient";
 
 export default function Inbox() {
+  const router = useRouter(); // <-- เรียกใช้ useRouter
+  const navigation = useNavigation();
   const [user, setUser] = useState(null);
   const [userList, setUserList] = useState([]);
   const [loader, setLoader] = useState(false);
 
-  // ดึงข้อมูล user ปัจจุบันจาก Supabase
   useEffect(() => {
     const getUser = async () => {
       const {
@@ -25,12 +29,10 @@ export default function Inbox() {
     }
   }, [user]);
 
-  // ดึง chatrooms ที่ user มีส่วนร่วม
   const GetUserList = async () => {
     setLoader(true);
     setUserList([]);
 
-    // ค้นหาห้องที่ user เข้าร่วม
     const { data: chatroomUsers, error } = await supabase
       .from("chatroom_users")
       .select("chatroom_id")
@@ -43,11 +45,9 @@ export default function Inbox() {
     }
 
     const chatroomIds = chatroomUsers.map((cu) => cu.chatroom_id);
-
     const enrichedList = [];
 
     for (const chatroomId of chatroomIds) {
-      // ดึงผู้ใช้ทั้งหมดในห้องนี้
       const { data: participants, error: participantsError } = await supabase
         .from("chatroom_users")
         .select("user_id")
@@ -83,12 +83,29 @@ export default function Inbox() {
   };
 
   return (
-    <View style={{ padding: 20 }}>
-      <Text
-        style={{ paddingTop: 20, fontFamily: "outfit-medium", fontSize: 30 }}
+    <View style={{ padding: 20, paddingTop: 40, flex: 1 }}>
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          marginBottom: 10,
+        }}
       >
-        Inbox
-      </Text>
+        {/* ปุ่มลูกศรกลับ */}
+        <TouchableOpacity onPress={() => router.push("/(tabs)/home")}>
+          <Ionicons name="arrow-back" size={28} color="black" />
+        </TouchableOpacity>
+
+        <Text
+          style={{
+            paddingLeft: 10,
+            fontFamily: "outfit-medium",
+            fontSize: 30,
+          }}
+        >
+          Inbox
+        </Text>
+      </View>
 
       <FlatList
         data={userList}

@@ -43,13 +43,19 @@ export default function AddNewPet() {
     });
     GetCategories();
 
-    // ดึงข้อมูล user จาก Supabase Auth
-    const sessionUser = supabase.auth.user();
-    if (sessionUser) {
-      setUser(sessionUser);
-    } else {
-      router.replace("/login"); // ถ้าไม่ login ให้ไปหน้า login
+    // ดึงข้อมูล user จาก Supabase Auth แบบ async
+    async function fetchUser() {
+      const {
+        data: { user },
+        error,
+      } = await supabase.auth.getUser();
+      if (user) {
+        setUser(user);
+      } else {
+        router.replace("/login"); // ถ้าไม่ login ให้ไปหน้า login
+      }
     }
+    fetchUser();
   }, []);
 
   const GetCategories = async () => {
@@ -180,7 +186,11 @@ export default function AddNewPet() {
           }}
         >
           {categoryList.map((category, index) => (
-            <Picker.Item key={index} label={category.name} value={category.name} />
+            <Picker.Item
+              key={index}
+              label={category.name}
+              value={category.name}
+            />
           ))}
         </Picker>
       </View>

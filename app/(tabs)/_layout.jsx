@@ -6,23 +6,26 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Color.PURPLE,
+        tabBarActiveTintColor: Color.BLACK,
         tabBarStyle: {
-          backgroundColor: "#fff", // สีพื้นหลัง tab bar
-          borderTopWidth: 0,       // ลบเส้นขอบบนออกเพื่อความเรียบง่าย
-          elevation: 5,            // เงาเบาๆ เพื่อให้ดูลอยขึ้นเล็กน้อย (Android)
-          shadowColor: "#000",     // เงาสำหรับ iOS
+          backgroundColor: "#fff",
+          borderTopWidth: 0,
+          elevation: 5,
+          shadowColor: "#000",
           shadowOpacity: 0.1,
           shadowOffset: { width: 0, height: -2 },
           shadowRadius: 10,
-          height: 60,              // ความสูงของ tab bar
+          height: 60,
           paddingBottom: 5,
+          borderTopLeftRadius: 20,
+          borderTopRightRadius: 20,
+          overflow: "hidden",
         },
         tabBarLabelStyle: {
           fontSize: 12,
           fontWeight: "600",
         },
-        headerShown: false, // ซ่อน header ของทุกหน้าที่อยู่ใน tab
+        headerShown: false,
       }}
     >
       <Tabs.Screen
@@ -30,7 +33,7 @@ export default function TabLayout() {
         options={{
           title: "Home",
           tabBarIcon: ({ color }) => (
-            <Ionicons name="home-sharp" size={28} color={color} />
+            <Ionicons name="home-sharp" size={25} color={color} />
           ),
         }}
       />
@@ -40,7 +43,7 @@ export default function TabLayout() {
         options={{
           title: "Search",
           tabBarIcon: ({ color }) => (
-            <Ionicons name="search" size={28} color={color} />
+            <Ionicons name="search" size={25} color={color} />
           ),
         }}
       />
@@ -50,17 +53,17 @@ export default function TabLayout() {
         options={{
           title: "Add Pet",
           tabBarIcon: ({ color }) => (
-            <Ionicons name="add-circle" size={28} color={color} />
+            <Ionicons name="add-circle" size={25} color={color} />
           ),
         }}
       />
 
       <Tabs.Screen
-        name="inbox"
+        name="notifications" // เปลี่ยนตรงนี้
         options={{
-          title: "Inbox",
+          title: "Notifications", // เปลี่ยน title
           tabBarIcon: ({ color }) => (
-            <Ionicons name="chatbubble" size={28} color={color} />
+            <Ionicons name="notifications" size={25} color={color} /> // เปลี่ยนไอคอนเป็น notifications
           ),
         }}
       />
@@ -70,7 +73,7 @@ export default function TabLayout() {
         options={{
           title: "Profile",
           tabBarIcon: ({ color }) => (
-            <Ionicons name="people-circle-sharp" size={28} color={color} />
+            <Ionicons name="people-circle-sharp" size={25} color={color} />
           ),
         }}
       />
