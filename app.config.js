@@ -7,7 +7,7 @@ export default {
     owner: "apmc581",
     version: "1.0.0",
     orientation: "portrait",
-    icon: "./assets/images/icon.png",
+    icon: "./assets/images/Intro-icon.png",
     userInterfaceStyle: "automatic",
     newArchEnabled: true,
     

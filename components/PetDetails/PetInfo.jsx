@@ -1,5 +1,5 @@
 import { Image, Text, View } from "react-native";
-import MarkFav from "../../components/MarkFav";
+import MarkFav from "../../components/MarkFav"; // สมมุติมี component นี้อยู่แล้ว
 import Colors from "../../constants/Colors";
 
 export default function PetInfo({ pet }) {
@@ -11,13 +11,12 @@ export default function PetInfo({ pet }) {
           width: "100%",
           height: 400,
           borderRadius: 10,
-          objectFit: "cover",
+          resizeMode: "cover",
         }}
       />
       <View
         style={{
           padding: 20,
-          display: "flex",
           flexDirection: "row",
           justifyContent: "space-between",
           alignItems: "center",

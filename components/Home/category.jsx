@@ -7,11 +7,10 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { supabase } from "../../config/supabaseClient"; // ต้องสร้างไฟล์นี้ให้เชื่อม Supabase
+import { supabase } from "../../config/supabaseClient"; // เชื่อมต่อ Supabase
 import Colors from "../../constants/Colors";
 
 export default function Category({ category }) {
-  
   const [categoryList, setCategories] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState("Dogs");
 
@@ -29,9 +28,18 @@ export default function Category({ category }) {
 
     if (data) {
       const desiredOrder = ["Dogs", "Cats", "Birds", "Rabbits"];
-      const sortedData = desiredOrder
+
+      // เรียงลำดับหมวดหมู่ตาม desiredOrder
+      const orderedCategories = desiredOrder
         .map((name) => data.find((item) => item.name === name))
-        .filter(Boolean); // กรอง null เผื่อมีชื่อไม่ตรง
+        .filter(Boolean);
+
+      // หมวดหมู่ที่ไม่ได้อยู่ใน desiredOrder ต่อท้าย
+      const otherCategories = data.filter(
+        (item) => !desiredOrder.includes(item.name)
+      );
+
+      const sortedData = [...orderedCategories, ...otherCategories];
 
       setCategories(sortedData);
     }
@@ -45,13 +53,14 @@ export default function Category({ category }) {
       <FlatList
         data={categoryList}
         keyExtractor={(item, index) => index.toString()}
-        numColumns={4}
+        horizontal={true} // เลื่อนแนวนอน
+        showsHorizontalScrollIndicator={false} // ซ่อน scrollbar
         renderItem={({ item }) => (
-          <View style={{ flex: 1, alignItems: "center" }}>
+          <View style={{ alignItems: "center" }}>
             <TouchableOpacity
               onPress={() => {
                 setSelectedCategory(item?.name);
-                category(item?.name); // callback
+                category(item?.name);
               }}
               style={[
                 styles.container,

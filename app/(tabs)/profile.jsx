@@ -104,7 +104,7 @@ export default function Profile() {
   return (
     <ScrollView style={{ flex: 1, backgroundColor: "#fff" }}>
       {/* Header */}
-      <View style={{ flexDirection: "row", padding: 20, alignItems: "center" , paddingTop: 40 }}>
+      <View style={{ flexDirection: "row", padding: 20, alignItems: "center" , paddingTop: 50 }}>
         <TouchableOpacity onPress={handleImagePick}>
           <Image
             source={{
@@ -113,7 +113,7 @@ export default function Profile() {
                 user?.avatar_url ||
                 "https://placekitten.com/200/200",
             }}
-            style={{ width: 90, height: 90, borderRadius: 99 }}
+            style={{ width: 70, height: 70, borderRadius: 99 }}
           />
         </TouchableOpacity>
 
