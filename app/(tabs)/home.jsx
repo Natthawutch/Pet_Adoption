@@ -1,6 +1,4 @@
-import MaterialIcons from "@expo/vector-icons/MaterialIcons";
-import { Link } from "expo-router";
-import { FlatList, SafeAreaView, StyleSheet, Text, View } from "react-native";
+import { FlatList, SafeAreaView, StyleSheet, View } from "react-native";
 import Header from "../../components/Home/header";
 import Petlistbycatgory from "../../components/Home/petlistbycatgory";
 import Slider from "../../components/Home/slider";
@@ -15,14 +13,6 @@ export default function Home() {
 
       <FlatList
         ListHeaderComponent={<Slider />}
-        ListFooterComponent={
-          <View style={{ alignItems: "center" }}>
-            <Link href="/add-new-pet" style={styles.addNewPetContainer}>
-              <MaterialIcons name="pets" size={24} color={Colors.PURPLE} />
-              <Text style={styles.addNewPetText}>Add New Pet</Text>
-            </Link>
-          </View>
-        }
         data={[]}
         renderItem={null}
         ListEmptyComponent={<Petlistbycatgory />}

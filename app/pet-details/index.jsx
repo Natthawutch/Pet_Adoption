@@ -1,6 +1,11 @@
+import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
+  Alert,
+  Animated,
   ScrollView,
   StyleSheet,
   Text,
@@ -19,32 +24,66 @@ export default function PetDetails() {
   const navigation = useNavigation();
   const router = useRouter();
   const [user, setUser] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [buttonScale] = useState(new Animated.Value(1));
 
   useEffect(() => {
     navigation.setOptions({
       headerTransparent: true,
       headerTitle: "",
+      headerTintColor: Colors.WHITE,
+      headerStyle: {
+        backgroundColor: "transparent",
+      },
     });
     fetchUser();
   }, []);
 
   const fetchUser = async () => {
-    const {
-      data: { user },
-      error,
-    } = await supabase.auth.getUser();
-    if (error) {
-      console.log("Error fetching user:", error.message);
-      return;
+    try {
+      const {
+        data: { user },
+        error,
+      } = await supabase.auth.getUser();
+
+      if (error) {
+        console.log("Error fetching user:", error.message);
+        Alert.alert("ข้อผิดพลาด", "ไม่สามารถดึงข้อมูลผู้ใช้ได้");
+        return;
+      }
+      setUser(user);
+    } catch (error) {
+      console.error("Unexpected error:", error);
     }
-    setUser(user);
+  };
+
+  const animateButton = () => {
+    Animated.sequence([
+      Animated.timing(buttonScale, {
+        toValue: 0.95,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+      Animated.timing(buttonScale, {
+        toValue: 1,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+    ]).start();
   };
 
   const InitiateChat = async () => {
     if (!user || !pet?.email) {
-      alert("User or Pet info is missing");
+      Alert.alert(
+        "ข้อมูลไม่ครบถ้วน",
+        "กรุณาเข้าสู่ระบบและตรวจสอบข้อมูลสัตว์เลี้ยง",
+        [{ text: "ตกลง", style: "default" }]
+      );
       return;
     }
+
+    setIsLoading(true);
+    animateButton();
 
     const userEmail = user.email;
     const docId1 = userEmail + "_" + pet.email;
@@ -107,48 +146,227 @@ export default function PetDetails() {
 
       if (insertError) throw insertError;
 
-      router.push({
-        pathname: "/chat",
-        params: { id: docId1 },
-      });
+      // แสดงข้อความสำเร็จก่อนไปหน้าแชท
+      Alert.alert("สำเร็จ!", "เริ่มการสนทนากับเจ้าของแล้ว", [
+        {
+          text: "ไปที่แชท",
+          onPress: () => {
+            router.push({
+              pathname: "/chat",
+              params: { id: docId1 },
+            });
+          },
+        },
+      ]);
     } catch (error) {
-      alert("เกิดข้อผิดพลาด: " + error.message);
+      Alert.alert(
+        "เกิดข้อผิดพลาด",
+        error.message || "ไม่สามารถเริ่มการสนทนาได้",
+        [{ text: "ลองใหม่", style: "default" }]
+      );
       console.error(error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
+  const handleFavorite = () => {
+    // Add favorite functionality here
+    Alert.alert(
+      "เพิ่มในรายการโปรด",
+      "คุณต้องการเพิ่มสัตว์เลี้ยงนี้ในรายการโปรดหรือไม่?"
+    );
+  };
+
+  const handleShare = () => {
+    // Add share functionality here
+    Alert.alert("แชร์", "แชร์ข้อมูลสัตว์เลี้ยงนี้");
+  };
+
   return (
-    <View>
-      <ScrollView>
+    <View style={styles.container}>
+      <ScrollView
+        style={styles.scrollView}
+        showsVerticalScrollIndicator={false}
+        bounces={true}
+      >
         <PetInfo pet={pet} />
-        <PetSubInfo pet={pet} />
-        <AboutPet pet={pet} />
-        <OwnerInfo pet={pet} />
-        <View style={{ height: 70 }} />
+        <View style={styles.contentContainer}>
+          <PetSubInfo pet={pet} />
+          <AboutPet pet={pet} />
+          <OwnerInfo pet={pet} />
+          <View style={{ height: 120 }} />
+        </View>
       </ScrollView>
+
+      {/* Action Buttons Container */}
       <View style={styles.bottomContainer}>
-        <TouchableOpacity onPress={InitiateChat} style={styles.adopBtn}>
-          <Text
-            style={{
-              textAlign: "center",
-              fontFamily: "outfit-medium",
-              fontSize: 20,
-              color: Colors.WHITE,
-            }}
+        <LinearGradient
+          colors={[
+            "transparent",
+            "rgba(255,255,255,0.95)",
+            "rgba(255,255,255,1)",
+          ]}
+          style={styles.gradientOverlay}
+        />
+
+        <View style={styles.actionContainer}>
+          {/* Secondary Actions */}
+          <View style={styles.secondaryActions}>
+            <TouchableOpacity
+              style={styles.iconButton}
+              onPress={handleFavorite}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="heart-outline" size={24} color={Colors.PURPLE} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.iconButton}
+              onPress={handleShare}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="share-outline" size={24} color={Colors.PURPLE} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Main Action Button */}
+          <Animated.View
+            style={[
+              styles.adoptButtonContainer,
+              { transform: [{ scale: buttonScale }] },
+            ]}
           >
-            Adopt Me
-          </Text>
-        </TouchableOpacity>
+            <TouchableOpacity
+              onPress={InitiateChat}
+              style={[styles.adoptBtn, isLoading && styles.adoptBtnDisabled]}
+              activeOpacity={0.8}
+              disabled={isLoading}
+            >
+              <LinearGradient
+                colors={
+                  isLoading ? ["#ccc", "#999"] : [Colors.PURPLE, "#8B5FBF"]
+                }
+                style={styles.gradientButton}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+              >
+                {isLoading ? (
+                  <View style={styles.loadingContainer}>
+                    <ActivityIndicator color={Colors.WHITE} size="small" />
+                    <Text style={styles.adoptBtnText}>กำลังดำเนินการ...</Text>
+                  </View>
+                ) : (
+                  <View style={styles.buttonContent}>
+                    <Ionicons
+                      name="chatbubble-outline"
+                      size={20}
+                      color={Colors.WHITE}
+                    />
+                    <Text style={styles.adoptBtnText}>สนใจรับเลี้ยง</Text>
+                  </View>
+                )}
+              </LinearGradient>
+            </TouchableOpacity>
+          </Animated.View>
+        </View>
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  adopBtn: { padding: 15, backgroundColor: Colors.PURPLE },
+  container: {
+    flex: 1,
+    backgroundColor: Colors.WHITE,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  contentContainer: {
+    backgroundColor: Colors.WHITE,
+  },
   bottomContainer: {
     position: "absolute",
     width: "100%",
     bottom: 0,
+  },
+  gradientOverlay: {
+    height: 60,
+    width: "100%",
+  },
+  actionContainer: {
+    flexDirection: "row",
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+    paddingTop: 10,
+    backgroundColor: Colors.WHITE,
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  secondaryActions: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  iconButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: Colors.WHITE,
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: "#f0f0f0",
+  },
+  adoptButtonContainer: {
+    flex: 1,
+    marginLeft: 16,
+  },
+  adoptBtn: {
+    borderRadius: 25,
+    overflow: "hidden",
+    shadowColor: Colors.PURPLE,
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  adoptBtnDisabled: {
+    shadowOpacity: 0.1,
+    elevation: 2,
+  },
+  gradientButton: {
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  buttonContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  loadingContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  adoptBtnText: {
+    textAlign: "center",
+    fontFamily: "outfit-medium",
+    fontSize: 18,
+    color: Colors.WHITE,
+    fontWeight: "600",
   },
 });

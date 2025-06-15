@@ -31,8 +31,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   icon: {
-    width: 36,
-    height: 36,
+    width: 40,
+    height: 40,
     resizeMode: "contain",
   },
   textContainer: {
@@ -40,7 +40,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily: "outfit",
-    fontSize: 14,
+    fontSize: 16,
     color: Colors.GRAY,
   },
   value: {

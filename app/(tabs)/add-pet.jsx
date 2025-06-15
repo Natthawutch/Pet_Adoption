@@ -313,6 +313,7 @@ export default function AddNewPet() {
         image_url: imageUrl,
         username: user.user_metadata?.full_name || user.email,
         email: user.email,
+        userImage: user.user_metadata?.avatar_url || null,
         created_at: new Date().toISOString(),
         user_id: user.id,
       };
@@ -688,6 +689,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 5,
+    paddingTop: 40, // เพิ่มช่องว่างด้านบนเพื่อไม่ให้ทับกับสถานะบาร์
   },
   headerTitle: {
     fontFamily: "outfit-bold",

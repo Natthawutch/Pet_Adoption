@@ -62,13 +62,16 @@ export default function CamlistFeedItem({ pet }) {
         <View style={styles.sellerInfo}>
           <Image
             source={{
-              uri: pet?.seller?.avatar || "https://via.placeholder.com/40",
+              uri:
+                pet?.userImage ||
+                pet?.seller?.avatar ||
+                "https://via.placeholder.com/40",
             }}
             style={styles.sellerAvatar}
           />
           <View style={styles.sellerDetails}>
             <Text style={styles.sellerName}>
-              {pet?.seller?.name || "Anonymous Seller"}
+              {pet?.username || pet?.seller?.name || "Anonymous Seller"}
             </Text>
             <Text style={styles.postTime}>
               {pet?.created_at
