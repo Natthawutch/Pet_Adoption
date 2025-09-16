@@ -1,7 +1,9 @@
+import { useUser } from "@clerk/clerk-expo";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
+import * as SecureStore from "expo-secure-store";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -11,13 +13,12 @@ import {
   Image,
   RefreshControl,
   ScrollView,
-  StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
-  View,
+  View
 } from "react-native";
-import { supabase } from "../../config/supabaseClient";
+import { createClerkSupabaseClient } from "../../config/supabaseClient"; // ✅ ต้องมี
 import Colors from "../../constants/Colors";
 
 const screenWidth = Dimensions.get("window").width;
@@ -25,30 +26,32 @@ const imageSize = (screenWidth - 6) / 3;
 
 export default function Profile() {
   const router = useRouter();
+  const { user } = useUser(); // ใช้ user id จาก Clerk
 
-  const [authUser, setAuthUser] = useState(null);
   const [profileUser, setProfileUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [posts, setPosts] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
 
-  // ดึงข้อมูลผู้ใช้และโปรไฟล์
   useEffect(() => {
+    if (!user) {
+      router.replace("/login");
+      return;
+    }
+
     const fetchUserData = async () => {
+      setLoading(true);
       try {
-        // ตรวจสอบการล็อกอิน
-        const {
-          data: { user },
-          error: authError,
-        } = await supabase.auth.getUser();
+        // ดึง Clerk token
+        const clerkToken = await SecureStore.getItemAsync("clerkToken");
+        if (!clerkToken) throw new Error("No Clerk token found!");
 
-        if (authError || !user) {
-          throw new Error(authError?.message || "User not authenticated");
-        }
+        // สร้าง Supabase client
+        const supabaseClerk = createClerkSupabaseClient(clerkToken);
 
-        // ดึงข้อมูลโปรไฟล์พร้อมจำนวนผู้ติดตาม
-        const { data: profile, error: profileError } = await supabase
+        // ดึงข้อมูล user จาก Supabase โดยใช้ user.id จาก Clerk
+        const { data: profile, error: profileError } = await supabaseClerk
           .from("users")
           .select(
             `
@@ -58,19 +61,18 @@ export default function Profile() {
           `
           )
           .eq("id", user.id)
-          .single();
+          .maybeSingle(); // ใช้ maybeSingle() ป้องกัน error ถ้าไม่เจอ row
 
         if (profileError) throw profileError;
 
-        setAuthUser(user);
         setProfileUser({
           ...profile,
-          followers: profile.followers[0]?.count || 0,
-          following: profile.following[0]?.count || 0,
+          followers: profile?.followers?.[0]?.count || 0,
+          following: profile?.following?.[0]?.count || 0,
         });
 
-        // ดึงโพสต์
-        await fetchPosts(user.id);
+        // โหลดโพสต์
+        await fetchPosts(supabaseClerk, user.id);
       } catch (error) {
         console.error("Failed to load profile:", error);
         Alert.alert("Error", "Failed to load user data");
@@ -81,12 +83,11 @@ export default function Profile() {
     };
 
     fetchUserData();
-  }, []);
+  }, [user]);
 
-  // ดึงโพสต์ของผู้ใช้
-  const fetchPosts = async (userId) => {
+  const fetchPosts = async (supabaseClerk, userId) => {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await supabaseClerk
         .from("posts")
         .select("id, media_url, caption, created_at, likes")
         .eq("user_id", userId)
@@ -99,7 +100,6 @@ export default function Profile() {
     }
   };
 
-  // อัปโหลดรูปโปรไฟล์ใหม่
   const handleImagePick = async () => {
     try {
       const { status } =
@@ -122,37 +122,34 @@ export default function Profile() {
       if (result.canceled || !result.assets?.[0]?.uri) return;
 
       setUploading(true);
-      const uri = result.assets[0].uri;
-      const filename = `avatars/${authUser.id}/${Date.now()}.jpg`;
 
-      // อัปโหลดไปยัง Storage
-      const { error: uploadError } = await supabase.storage
+      const clerkToken = await SecureStore.getItemAsync("clerkToken");
+      const supabaseClerk = createClerkSupabaseClient(clerkToken);
+
+      const uri = result.assets[0].uri;
+      const filename = `avatars/${user.id}/${Date.now()}.jpg`;
+
+      // Upload
+      const { error: uploadError } = await supabaseClerk.storage
         .from("user-avatars")
         .upload(
           filename,
-          {
-            uri,
-            type: "image/jpeg",
-            name: filename,
-          },
-          {
-            cacheControl: "3600",
-            upsert: true,
-          }
+          { uri, type: "image/jpeg", name: filename },
+          { cacheControl: "3600", upsert: true }
         );
 
       if (uploadError) throw uploadError;
 
-      // ได้ public URL
+      // Public URL
       const {
         data: { publicUrl },
-      } = supabase.storage.from("user-avatars").getPublicUrl(filename);
+      } = supabaseClerk.storage.from("user-avatars").getPublicUrl(filename);
 
-      // อัปเดตในตาราง users
-      const { error: updateError } = await supabase
+      // Update Supabase
+      const { error: updateError } = await supabaseClerk
         .from("users")
         .update({ avatar_url: publicUrl })
-        .eq("id", authUser.id);
+        .eq("id", user.id);
 
       if (updateError) throw updateError;
 
@@ -166,10 +163,9 @@ export default function Profile() {
     }
   };
 
-  // ออกจากระบบ
   const handleLogout = async () => {
     try {
-      await supabase.auth.signOut();
+      await SecureStore.deleteItemAsync("clerkToken");
       await AsyncStorage.removeItem("userSession");
       router.replace("/login");
     } catch (error) {
@@ -178,15 +174,13 @@ export default function Profile() {
     }
   };
 
-  // รีเฟรชข้อมูล
   const onRefresh = async () => {
     setRefreshing(true);
     try {
-      if (authUser?.id) {
-        await Promise.all([
-          fetchPosts(authUser.id),
-          // สามารถเพิ่มการดึงข้อมูลอื่นๆ ที่ต้องการรีเฟรชที่นี่
-        ]);
+      const clerkToken = await SecureStore.getItemAsync("clerkToken");
+      const supabaseClerk = createClerkSupabaseClient(clerkToken);
+      if (user?.id) {
+        await fetchPosts(supabaseClerk, user.id);
       }
     } catch (error) {
       console.error("Refresh failed:", error);
@@ -205,162 +199,155 @@ export default function Profile() {
   }
 
   return (
-    <>
-      <StatusBar barStyle="dark-content" backgroundColor="#fff" />
-      <ScrollView
-        style={styles.container}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={[Colors.PURPLE]}
-          />
-        }
-      >
-        {/* ส่วนหัวโปรไฟล์ */}
-        <View style={styles.header}>
-          <View style={styles.avatarContainer}>
-            <TouchableOpacity onPress={handleImagePick} disabled={uploading}>
-              <View style={styles.avatarWrapper}>
-                <Image
-                  source={{
-                    uri:
-                      profileUser.avatar_url ||
-                      "https://www.gravatar.com/avatar/?d=mp",
-                  }}
-                  style={styles.avatar}
-                />
-                {uploading && (
-                  <View style={styles.uploadingOverlay}>
-                    <ActivityIndicator size="small" color="#fff" />
-                  </View>
-                )}
-                <View style={styles.editIcon}>
-                  <Ionicons name="camera" size={16} color="#fff" />
+    <ScrollView
+      style={styles.container}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          colors={[Colors.PURPLE]}
+        />
+      }
+    >
+      {/* ส่วนหัวโปรไฟล์ */}
+      <View style={styles.header}>
+        <View style={styles.avatarContainer}>
+          <TouchableOpacity onPress={handleImagePick} disabled={uploading}>
+            <View style={styles.avatarWrapper}>
+              <Image
+                source={{
+                  uri:
+                    profileUser.avatar_url ||
+                    "https://www.gravatar.com/avatar/?d=mp",
+                }}
+                style={styles.avatar}
+              />
+              {uploading && (
+                <View style={styles.uploadingOverlay}>
+                  <ActivityIndicator size="small" color="#fff" />
                 </View>
+              )}
+              <View style={styles.editIcon}>
+                <Ionicons name="camera" size={16} color="#fff" />
               </View>
+            </View>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.statsContainer}>
+          <View style={styles.statItem}>
+            <Text style={styles.statNumber}>{posts.length}</Text>
+            <Text style={styles.statLabel}>โพสต์</Text>
+          </View>
+          <View style={styles.statItem}>
+            <Text style={styles.statNumber}>{profileUser.followers}</Text>
+            <Text style={styles.statLabel}>ผู้ติดตาม</Text>
+          </View>
+          <View style={styles.statItem}>
+            <Text style={styles.statNumber}>{profileUser.following}</Text>
+            <Text style={styles.statLabel}>กำลังติดตาม</Text>
+          </View>
+        </View>
+      </View>
+
+      {/* ข้อมูลผู้ใช้ */}
+      <View style={styles.userInfo}>
+        <Text style={styles.fullName}>
+          {profileUser.full_name || "ผู้ใช้ไม่ระบุชื่อ"}
+        </Text>
+        {user?.primaryEmailAddress?.emailAddress && (
+          <Text style={styles.email}>
+            {user.primaryEmailAddress.emailAddress}
+          </Text>
+        )}
+        <Text style={styles.bio}>
+          {profileUser.bio || "ยังไม่มีข้อมูลส่วนตัว"}
+        </Text>
+      </View>
+
+      {/* ปุ่มดำเนินการ */}
+      <View style={styles.actionButtons}>
+        <TouchableOpacity
+          onPress={() => router.push("/edit-profile")}
+          style={styles.editButton}
+        >
+          <Ionicons name="create-outline" size={18} color={Colors.PURPLE} />
+          <Text style={styles.editButtonText}>แก้ไขโปรไฟล์</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => router.push("/settings")}
+          style={styles.settingsButton}
+        >
+          <Ionicons name="settings-outline" size={18} color="#666" />
+        </TouchableOpacity>
+
+        <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
+          <Ionicons name="log-out-outline" size={18} color="#fff" />
+          <Text style={styles.logoutButtonText}>ออกจากระบบ</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* ส่วนโพสต์ */}
+      <View style={styles.postsSection}>
+        <View style={styles.postsSectionHeader}>
+          <Ionicons name="grid-outline" size={20} color="#666" />
+          <Text style={styles.postsSectionTitle}>โพสต์ของฉัน</Text>
+        </View>
+
+        {posts.length > 0 ? (
+          <FlatList
+            data={posts}
+            numColumns={3}
+            scrollEnabled={false}
+            keyExtractor={(item) => item.id.toString()}
+            renderItem={({ item, index }) => (
+              <TouchableOpacity
+                onPress={() => router.push(`/post/${item.id}`)}
+                style={{
+                  width: imageSize,
+                  height: imageSize,
+                  marginRight: (index + 1) % 3 === 0 ? 0 : 2,
+                  marginBottom: 2,
+                }}
+              >
+                <Image
+                  source={{ uri: item.media_url }}
+                  style={{ width: "100%", height: "100%" }}
+                />
+              </TouchableOpacity>
+            )}
+          />
+        ) : (
+          <View style={styles.emptyState}>
+            <Ionicons name="camera-outline" size={60} color="#ccc" />
+            <Text style={styles.emptyStateTitle}>ยังไม่มีโพสต์</Text>
+            <Text style={styles.emptyStateSubtitle}>
+              เริ่มแชร์รูปภาพแรกของคุณเลย!
+            </Text>
+            <TouchableOpacity
+              onPress={() => router.push("/create-post")}
+              style={styles.createPostButton}
+            >
+              <Text style={styles.createPostButtonText}>สร้างโพสต์</Text>
             </TouchableOpacity>
           </View>
-
-          <View style={styles.statsContainer}>
-            <View style={styles.statItem}>
-              <Text style={styles.statNumber}>{posts.length}</Text>
-              <Text style={styles.statLabel}>โพสต์</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Text style={styles.statNumber}>{profileUser.followers}</Text>
-              <Text style={styles.statLabel}>ผู้ติดตาม</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Text style={styles.statNumber}>{profileUser.following}</Text>
-              <Text style={styles.statLabel}>กำลังติดตาม</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* ข้อมูลผู้ใช้ */}
-        <View style={styles.userInfo}>
-          <Text style={styles.fullName}>
-            {profileUser.full_name || "ผู้ใช้ไม่ระบุชื่อ"}
-          </Text>
-          {authUser?.email && (
-            <Text style={styles.email}>{authUser.email}</Text>
-          )}
-          <Text style={styles.bio}>
-            {profileUser.bio || "ยังไม่มีข้อมูลส่วนตัว"}
-          </Text>
-        </View>
-
-        {/* ปุ่มดำเนินการ */}
-        <View style={styles.actionButtons}>
-          <TouchableOpacity
-            onPress={() => router.push("/edit-profile")}
-            style={styles.editButton}
-          >
-            <Ionicons name="create-outline" size={18} color={Colors.PURPLE} />
-            <Text style={styles.editButtonText}>แก้ไขโปรไฟล์</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={() => router.push("/settings")}
-            style={styles.settingsButton}
-          >
-            <Ionicons name="settings-outline" size={18} color="#666" />
-          </TouchableOpacity>
-
-          <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
-            <Ionicons name="log-out-outline" size={18} color="#fff" />
-            <Text style={styles.logoutButtonText}>ออกจากระบบ</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* ส่วนโพสต์ */}
-        <View style={styles.postsSection}>
-          <View style={styles.postsSectionHeader}>
-            <Ionicons name="grid-outline" size={20} color="#666" />
-            <Text style={styles.postsSectionTitle}>โพสต์ของฉัน</Text>
-          </View>
-
-          {posts.length > 0 ? (
-            <FlatList
-              data={posts}
-              numColumns={3}
-              scrollEnabled={false}
-              keyExtractor={(item) => item.id.toString()}
-              renderItem={({ item, index }) => (
-                <TouchableOpacity
-                  onPress={() => router.push(`/post/${item.id}`)}
-                  style={{
-                    width: imageSize,
-                    height: imageSize,
-                    marginRight: (index + 1) % 3 === 0 ? 0 : 2,
-                    marginBottom: 2,
-                  }}
-                >
-                  <Image
-                    source={{ uri: item.media_url }}
-                    style={{ width: "100%", height: "100%" }}
-                  />
-                </TouchableOpacity>
-              )}
-            />
-          ) : (
-            <View style={styles.emptyState}>
-              <Ionicons name="camera-outline" size={60} color="#ccc" />
-              <Text style={styles.emptyStateTitle}>ยังไม่มีโพสต์</Text>
-              <Text style={styles.emptyStateSubtitle}>
-                เริ่มแชร์รูปภาพแรกของคุณเลย!
-              </Text>
-              <TouchableOpacity
-                onPress={() => router.push("/create-post")}
-                style={styles.createPostButton}
-              >
-                <Text style={styles.createPostButtonText}>สร้างโพสต์</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-        </View>
-      </ScrollView>
-    </>
+        )}
+      </View>
+    </ScrollView>
   );
 }
 
+// --- Styles ไม่ต้องเปลี่ยน ---
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#fff",
-  },
+  container: { flex: 1, backgroundColor: "#fff" },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: "#fff",
   },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: Colors.PURPLE,
-  },
+  loadingText: { marginTop: 16, fontSize: 16, color: Colors.PURPLE },
   header: {
     flexDirection: "row",
     padding: 20,
@@ -368,9 +355,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#f0f0f0",
   },
-  avatarContainer: {
-    marginRight: 20,
-  },
+  avatarContainer: { marginRight: 20 },
   avatarWrapper: {
     position: "relative",
     shadowColor: "#000",
@@ -400,50 +385,19 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.PURPLE,
     borderRadius: 15,
     padding: 6,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-    elevation: 2,
   },
   statsContainer: {
     flex: 1,
     flexDirection: "row",
     justifyContent: "space-between",
   },
-  statItem: {
-    alignItems: "center",
-    paddingHorizontal: 10,
-  },
-  statNumber: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#333",
-  },
-  statLabel: {
-    fontSize: 14,
-    color: "#666",
-    marginTop: 4,
-  },
-  userInfo: {
-    padding: 20,
-  },
-  fullName: {
-    fontSize: 22,
-    fontWeight: "bold",
-    color: "#333",
-  },
-  email: {
-    fontSize: 16,
-    color: "#666",
-    marginTop: 4,
-  },
-  bio: {
-    fontSize: 16,
-    color: "#444",
-    marginTop: 8,
-    lineHeight: 22,
-  },
+  statItem: { alignItems: "center", paddingHorizontal: 10 },
+  statNumber: { fontSize: 20, fontWeight: "bold", color: "#333" },
+  statLabel: { fontSize: 14, color: "#666", marginTop: 4 },
+  userInfo: { padding: 20 },
+  fullName: { fontSize: 22, fontWeight: "bold", color: "#333" },
+  email: { fontSize: 16, color: "#666", marginTop: 4 },
+  bio: { fontSize: 16, color: "#444", marginTop: 8, lineHeight: 22 },
   actionButtons: {
     flexDirection: "row",
     paddingHorizontal: 20,
@@ -460,11 +414,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.PURPLE,
   },
-  editButtonText: {
-    marginLeft: 6,
-    color: Colors.PURPLE,
-    fontWeight: "500",
-  },
+  editButtonText: { marginLeft: 6, color: Colors.PURPLE, fontWeight: "500" },
   settingsButton: {
     justifyContent: "center",
     alignItems: "center",
@@ -480,11 +430,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: 8,
   },
-  logoutButtonText: {
-    marginLeft: 6,
-    color: "#fff",
-    fontWeight: "500",
-  },
+  logoutButtonText: { marginLeft: 6, color: "#fff", fontWeight: "500" },
   postsSection: {
     marginTop: 20,
     borderTopWidth: 1,
@@ -514,11 +460,7 @@ const styles = StyleSheet.create({
     color: "#666",
     marginTop: 12,
   },
-  emptyStateSubtitle: {
-    fontSize: 14,
-    color: "#999",
-    marginTop: 4,
-  },
+  emptyStateSubtitle: { fontSize: 14, color: "#999", marginTop: 4 },
   createPostButton: {
     marginTop: 20,
     backgroundColor: Colors.PURPLE,
@@ -526,8 +468,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     borderRadius: 24,
   },
-  createPostButtonText: {
-    color: "#fff",
-    fontWeight: "600",
-  },
+  createPostButtonText: { color: "#fff", fontWeight: "600" },
 });

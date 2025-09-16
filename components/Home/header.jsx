@@ -1,3 +1,4 @@
+import { useAuth, useUser } from "@clerk/clerk-expo";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { useEffect, useState } from "react";
@@ -8,60 +9,30 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { supabase } from "../../config/supabaseClient";
 
 export default function Header() {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
   const [inboxCount, setInboxCount] = useState(2);
+  const { isSignedIn } = useAuth();
+  const { user: clerkUser, isLoaded } = useUser();
   const navigation = useNavigation();
 
   useEffect(() => {
-    const fetchUserData = async () => {
-      try {
-        const {
-          data: { session },
-          error: sessionError,
-        } = await supabase.auth.getSession();
-
-        if (sessionError || !session)
-          throw sessionError || new Error("No active session");
-
-        const {
-          data: { user },
-          error: userError,
-        } = await supabase.auth.getUser();
-
-        if (userError) throw userError;
-
+    if (isLoaded) {
+      if (isSignedIn && clerkUser) {
         setUser({
-          ...user,
-          full_name:
-            user.user_metadata?.full_name ||
-            user.email?.split("@")[0] ||
-            "User",
-          avatar_url: user.user_metadata?.avatar_url || null,
+          id: clerkUser.id,
+          full_name: clerkUser.fullName || clerkUser.firstName || "User",
+          email: clerkUser.primaryEmailAddress?.emailAddress,
+          avatar_url: clerkUser.imageUrl,
         });
-      } catch (error) {
-        console.error("Error fetching user data:", error.message);
-      } finally {
-        setLoading(false);
+      } else {
+        setUser(null);
       }
-    };
-
-    fetchUserData();
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) fetchUserData();
-      else setUser(null);
-    });
-
-    return () => {
-      subscription?.unsubscribe();
-    };
-  }, []);
+      setLoading(false);
+    }
+  }, [isLoaded, isSignedIn, clerkUser]);
 
   if (loading) {
     return (
@@ -73,11 +44,7 @@ export default function Header() {
 
   return (
     <View style={styles.container}>
-      {/* ซ้าย: ชื่อแอป */}
-
       <Text style={styles.appTitle}>Stray Dog Care</Text>
-
-      {/* ขวา: Favorites + Inbox */}
       <View style={styles.rightIcons}>
         <TouchableOpacity
           style={styles.icon}
@@ -124,19 +91,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  appTitle: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#1e1e1e",
-  },
-  rightIcons: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  icon: {
-    position: "relative",
-    padding: 5,
-  },
+  appTitle: { fontSize: 20, fontWeight: "bold", color: "#1e1e1e" },
+  rightIcons: { flexDirection: "row", alignItems: "center" },
+  icon: { position: "relative", padding: 5 },
   badge: {
     position: "absolute",
     top: -4,
@@ -149,9 +106,5 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  badgeText: {
-    color: "white",
-    fontSize: 10,
-    fontWeight: "bold",
-  },
+  badgeText: { color: "white", fontSize: 10, fontWeight: "bold" },
 });
