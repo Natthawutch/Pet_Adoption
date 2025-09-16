@@ -108,12 +108,12 @@ export default function CamlistFeedItem({ pet }) {
           onLoadEnd={() => setImageLoading(false)}
         />
 
-        {/* Price tag overlay */}
+        {/* Price tag overlay
         <View style={styles.priceTag}>
           <Text style={styles.priceText}>
-            {pet?.price ? `$${pet.price.toFixed(2)}` : "Ask for price"}
+            {pet?.price ? `$${pet.price.toFixed(2)}` : ""}
           </Text>
-        </View>
+        </View> */}
       </TouchableOpacity>
 
       {/* Action buttons */}
@@ -260,6 +260,7 @@ const styles = StyleSheet.create({
     width: "100%",
     height: "100%",
     resizeMode: "cover",
+    borderRadius: 12,
   },
   imageLoader: {
     position: "absolute",
@@ -269,20 +270,20 @@ const styles = StyleSheet.create({
     marginTop: -15,
     zIndex: 2,
   },
-  priceTag: {
-    position: "absolute",
-    bottom: 16,
-    right: 16,
-    backgroundColor: "rgba(0,0,0,0.8)",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-  },
-  priceText: {
-    color: "#fff",
-    fontFamily: "outfit-bold",
-    fontSize: 16,
-  },
+  // priceTag: {
+  //   position: "absolute",
+  //   bottom: 16,
+  //   right: 16,
+  //   backgroundColor: "rgba(0,0,0,0.8)",
+  //   paddingHorizontal: 12,
+  //   paddingVertical: 6,
+  //   borderRadius: 20,
+  // },
+  // priceText: {
+  //   color: "#fff",
+  //   fontFamily: "outfit-bold",
+  //   fontSize: 16,
+  // },
   actionRow: {
     flexDirection: "row",
     justifyContent: "space-between",

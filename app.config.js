@@ -4,58 +4,41 @@ export default {
   expo: {
     name: "pet-adoption-app",
     slug: "pet-adoption-app",
-    owner: "apmc581",
     version: "1.0.0",
-    orientation: "portrait",
-    icon: "./assets/images/Intro-icon.png",
-    userInterfaceStyle: "automatic",
-    newArchEnabled: true,
-    
-    // ✅ เพิ่มบรรทัดนี้
     scheme: "petadoption",
-
-    ios: {
-      supportsTablet: true,
-    },
     android: {
-      adaptiveIcon: {
-        foregroundImage: "./assets/images/adaptive-icon.png",
-        backgroundColor: "#ffffff",
+      usesCleartextTraffic: true, // จำเป็นสำหรับ Android
+      intentFilters: [
+        {
+          action: "VIEW",
+          data: [
+            {
+              scheme: "petadoption",
+            },
+          ],
+          category: ["BROWSABLE", "DEFAULT"],
+        },
+      ],
+    },
+    ios: {
+      infoPlist: {
+        NSAppTransportSecurity: {
+          NSAllowsArbitraryLoads: true, // จำเป็นสำหรับ iOS
+        },
       },
-      edgeToEdgeEnabled: true,
+      bundleIdentifier: "com.cmru.petadoption",
+      scheme: "petadoption",
     },
     web: {
       bundler: "metro",
       output: "static",
       favicon: "./assets/images/favicon.png",
     },
-    plugins: [
-      "expo-router",
-      [
-        "expo-image-picker",
-        {
-          photosPermission:
-            "The app accesses your photos to let you share them with your friends.",
-        },
-      ],
-      [
-        "expo-splash-screen",
-        {
-          image: "./assets/images/splash-icon.png",
-          imageWidth: 200,
-          resizeMode: "contain",
-          backgroundColor: "#ffffff",
-        },
-      ],
-      "expo-secure-store",
-      "expo-web-browser",
-    ],
-    experiments: {
-      typedRoutes: true,
-    },
     extra: {
-      supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL,
-      supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
+      clerkPublishableKey: process.env.CLERK_PUBLISHABLE_KEY,
+      supabaseUrl: "https://stsordxxnzlxrpiwdbpx.supabase.co",
+      supabaseAnonKey:
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN0c29yZHh4bnpseHJwaXdkYnB4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDc4MjQ2OTgsImV4cCI6MjA2MzQwMDY5OH0.hAeg7ilPoR_P6SifoL908YMRrfoqCFwPeKL6lWOA1NA",
     },
   },
 };
