@@ -1,10 +1,10 @@
-import { useUser } from "@clerk/clerk-expo";
+import { useClerk, useUser } from "@clerk/clerk-expo";
 import { Ionicons } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import * as SecureStore from "expo-secure-store";
 import { useEffect, useState } from "react";
+
 import {
   ActivityIndicator,
   Alert,
@@ -16,9 +16,9 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
-  View
+  View,
 } from "react-native";
-import { createClerkSupabaseClient } from "../../config/supabaseClient"; // ✅ ต้องมี
+import { createClerkSupabaseClient } from "../../config/supabaseClient";
 import Colors from "../../constants/Colors";
 
 const screenWidth = Dimensions.get("window").width;
@@ -26,7 +26,7 @@ const imageSize = (screenWidth - 6) / 3;
 
 export default function Profile() {
   const router = useRouter();
-  const { user } = useUser(); // ใช้ user id จาก Clerk
+  const { user } = useUser();
 
   const [profileUser, setProfileUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -43,14 +43,11 @@ export default function Profile() {
     const fetchUserData = async () => {
       setLoading(true);
       try {
-        // ดึง Clerk token
         const clerkToken = await SecureStore.getItemAsync("clerkToken");
         if (!clerkToken) throw new Error("No Clerk token found!");
 
-        // สร้าง Supabase client
         const supabaseClerk = createClerkSupabaseClient(clerkToken);
 
-        // ดึงข้อมูล user จาก Supabase โดยใช้ user.id จาก Clerk
         const { data: profile, error: profileError } = await supabaseClerk
           .from("users")
           .select(
@@ -61,7 +58,7 @@ export default function Profile() {
           `
           )
           .eq("id", user.id)
-          .maybeSingle(); // ใช้ maybeSingle() ป้องกัน error ถ้าไม่เจอ row
+          .maybeSingle();
 
         if (profileError) throw profileError;
 
@@ -71,7 +68,6 @@ export default function Profile() {
           following: profile?.following?.[0]?.count || 0,
         });
 
-        // โหลดโพสต์
         await fetchPosts(supabaseClerk, user.id);
       } catch (error) {
         console.error("Failed to load profile:", error);
@@ -129,7 +125,6 @@ export default function Profile() {
       const uri = result.assets[0].uri;
       const filename = `avatars/${user.id}/${Date.now()}.jpg`;
 
-      // Upload
       const { error: uploadError } = await supabaseClerk.storage
         .from("user-avatars")
         .upload(
@@ -140,12 +135,10 @@ export default function Profile() {
 
       if (uploadError) throw uploadError;
 
-      // Public URL
       const {
         data: { publicUrl },
       } = supabaseClerk.storage.from("user-avatars").getPublicUrl(filename);
 
-      // Update Supabase
       const { error: updateError } = await supabaseClerk
         .from("users")
         .update({ avatar_url: publicUrl })
@@ -163,16 +156,41 @@ export default function Profile() {
     }
   };
 
-  const handleLogout = async () => {
-    try {
-      await SecureStore.deleteItemAsync("clerkToken");
-      await AsyncStorage.removeItem("userSession");
-      router.replace("/login");
-    } catch (error) {
-      console.error("Logout failed:", error);
-      Alert.alert("Logout failed", "Please try again");
-    }
-  };
+  // --- ฟังก์ชัน Logout ---
+  const { signOut } = useClerk();
+
+const handleLogout = async () => {
+  Alert.alert(
+    "ยืนยันการออกจากระบบ",
+    "คุณต้องการออกจากระบบใช่หรือไม่?",
+    [
+      {
+        text: "ยกเลิก",
+        style: "cancel",
+      },
+      {
+        text: "ออกจากระบบ",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            // Sign out จาก Clerk + OAuth
+            await signOut();
+
+            // ลบ token local
+            await SecureStore.deleteItemAsync("clerkToken");
+
+            // ไปหน้า Login
+            router.replace("/login");
+          } catch (error) {
+            console.error("Logout failed:", error);
+            Alert.alert("Logout failed", "กรุณาลองใหม่อีกครั้ง");
+          }
+        },
+      },
+    ],
+    { cancelable: true }
+  );
+};
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -268,7 +286,7 @@ export default function Profile() {
       {/* ปุ่มดำเนินการ */}
       <View style={styles.actionButtons}>
         <TouchableOpacity
-          onPress={() => router.push("/edit-profile")}
+          onPress={() => router.push("/edit-profile/EditProfile")}
           style={styles.editButton}
         >
           <Ionicons name="create-outline" size={18} color={Colors.PURPLE} />
@@ -338,7 +356,7 @@ export default function Profile() {
   );
 }
 
-// --- Styles ไม่ต้องเปลี่ยน ---
+// --- Styles ---
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#fff" },
   loadingContainer: {

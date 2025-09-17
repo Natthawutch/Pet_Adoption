@@ -11,7 +11,6 @@ export default function RootLayout() {
     "outfit-bold": require("../assets/fonts/Outfit-Bold.ttf"),
   });
 
-  // ยังโหลด font อยู่
   if (!fontsLoaded) {
     return (
       <View
@@ -31,16 +30,10 @@ export default function RootLayout() {
     <ClerkWrapper>
       <StatusBar style="dark" />
       <Stack>
+        {/* routes */}
         <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="login/index" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="Inbox/inbox" options={{ headerShown: false }} />
-        <Stack.Screen name="Favorite/favorite" options={{ headerShown: false }} />
-        <Stack.Screen name="register/index" options={{ headerShown: false }} />
-        <Stack.Screen
-          name="edit-profile/EditProfile"
-          options={{ headerShown: false }}
-        />
       </Stack>
     </ClerkWrapper>
   );
