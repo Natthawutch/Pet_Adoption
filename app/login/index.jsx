@@ -24,7 +24,7 @@ const { width, height } = Dimensions.get("window");
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { user } = useUser();
+  const { user, isSignedIn } = useUser();
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -36,48 +36,106 @@ export default function LoginScreen() {
   const syncUserToSupabase = async () => {
     try {
       if (!user) return;
+
+      // รับ token จาก Clerk
       const token = await user.getToken({ template: "supabase" });
       if (!token) throw new Error("No token from Clerk");
 
-      supabase.auth.setAuth(token);
-
-      const { data, error } = await supabase.from("users").upsert({
-        clerk_id: user.id,
-        email: user.primaryEmailAddress?.emailAddress,
-        full_name: user.fullName,
-        avatar_url: user.imageUrl,
-        bio: "",
+      // ตั้งค่า auth ให้ Supabase
+      const { error: authError } = await supabase.auth.setSession({
+        access_token: token,
+        refresh_token: "",
       });
 
-      if (error) {
-        console.log("❌ Supabase upsert error:", error);
-      } else {
-        console.log("✅ Supabase upsert success:", data);
+      if (authError) {
+        console.log("❌ Supabase auth error:", authError);
+        return;
       }
+
+      // ตรวจสอบว่ามีผู้ใช้ใน Supabase แล้วหรือยัง
+      const { data: existingUser, error: selectError } = await supabase
+        .from("users")
+        .select("clerk_id")
+        .eq("clerk_id", user.id)
+        .single();
+
+      if (selectError && selectError.code !== "PGRST116") {
+        console.log("❌ Error checking user:", selectError);
+      }
+
+      // ถ้ายังไม่มีผู้ใช้ ให้เพิ่มใหม่
+      if (!existingUser) {
+        const { data, error: upsertError } = await supabase
+          .from("users")
+          .upsert({
+            clerk_id: user.id,
+            email: user.primaryEmailAddress?.emailAddress,
+            full_name: user.fullName,
+            avatar_url: user.imageUrl,
+            bio: "",
+          });
+
+        if (upsertError) {
+          console.log("❌ Supabase upsert error:", upsertError);
+        } else {
+          console.log("✅ Supabase upsert success:", data);
+        }
+      } else {
+        console.log("✅ User already exists in Supabase");
+      }
+
+      // ไปหน้า home หลังจาก sync สำเร็จ
+      router.replace("/home");
     } catch (err) {
       console.error("❌ Sync failed:", err);
     }
   };
 
   useEffect(() => {
-    if (user) {
+    if (isSignedIn && user) {
+      console.log("✅ User is signed in, syncing to Supabase");
       syncUserToSupabase();
-      router.replace("/home");
     }
-  }, [user]);
+  }, [isSignedIn, user]);
 
   // Google Login
   const handleGoogleLogin = async () => {
     try {
       setLoading(true);
       const result = await googleAuth.startOAuthFlow();
-      if (result?.createdSessionId) {
+
+      if (result?.createdSessionId && user) {
         console.log("✅ Google login success");
+
+        // ดึง token จาก Clerk
+        const token = await user.getToken({ template: "supabase" });
+        if (!token) throw new Error("No token from Clerk");
+
+        // login Supabase ด้วย token
+        const { data: supaData, error: supaError } =
+          await supabase.auth.signInWithIdToken({
+            provider: "clerk",
+            token,
+          });
+
+        if (supaError) throw supaError;
+
+        // upsert user ลง table users
+        await supabase.from("users").upsert({
+          clerk_id: user.id,
+          email: user.primaryEmailAddress?.emailAddress,
+          full_name: user.fullName,
+          avatar_url: user.imageUrl,
+          bio: "",
+        });
+
+        // ไปหน้า home
+        router.replace("/home");
       } else {
         Alert.alert("Login failed", "No session created");
       }
     } catch (err) {
-      console.error("❌ Google OAuth error:", err);
+      console.error("❌ Google login error:", err);
       Alert.alert("Error", "Login failed");
     } finally {
       setLoading(false);
@@ -92,6 +150,7 @@ export default function LoginScreen() {
         email,
         password,
       });
+
       if (error) throw error;
 
       // Upsert user to Supabase table
@@ -207,6 +266,7 @@ export default function LoginScreen() {
                 <Text style={[styles.buttonText, { color: "#333" }]}>
                   เข้าสู่ระบบด้วย Google
                 </Text>
+                {loading && <ActivityIndicator color="#333" size="small" />}
               </TouchableOpacity>
             </View>
           </View>
