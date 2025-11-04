@@ -169,7 +169,7 @@ export default function Profile() {
         onPress: async () => {
           try {
             await signOut();
-            router.replace("/home");
+            router.replace("/login");
           } catch (error) {
             console.error("Logout failed:", error);
             Alert.alert("Logout failed", "กรุณาลองใหม่อีกครั้ง");

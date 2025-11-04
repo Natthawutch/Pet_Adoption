@@ -37,7 +37,7 @@ export default function SignInScreen() {
 
   // ฟังก์ชันสำหรับกลับไปหน้า Home
   const handleBack = () => {
-    router.replace("/"); // หรือใช้ router.back() เพื่อกลับไปหน้าก่อนหน้า
+    router.replace("/home"); // หรือใช้ router.back() เพื่อกลับไปหน้าก่อนหน้า
   };
 
   const onSignInPress = async () => {
@@ -80,7 +80,7 @@ export default function SignInScreen() {
 
       if (createdSessionId) {
         await oauthSetActive({ session: createdSessionId });
-        router.replace("/");
+        router.replace("/home");
       } else {
         console.log("OAuth incomplete:", signIn, signUp);
       }
