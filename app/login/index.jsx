@@ -1,336 +1,437 @@
-import { useOAuth, useUser } from "@clerk/clerk-expo";
-import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
-import { useRouter } from "expo-router";
+import { useOAuth, useSignIn } from "@clerk/clerk-expo";
+import { Ionicons } from "@expo/vector-icons"; // เพิ่ม import ไอคอน
+import { Link, useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Dimensions,
-  ImageBackground,
-  StatusBar,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
-import { supabase } from "../../config/supabaseClient";
+import Colors from "../../constants/Colors";
 
 WebBrowser.maybeCompleteAuthSession();
 
-const { width, height } = Dimensions.get("window");
-
-export default function LoginScreen() {
+export default function SignInScreen() {
+  const { signIn, setActive, isLoaded } = useSignIn();
   const router = useRouter();
-  const { user, isSignedIn } = useUser();
-  const [loading, setLoading] = useState(false);
-  const [email, setEmail] = useState("");
+
+  const [emailAddress, setEmailAddress] = useState("");
   const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [focusedInput, setFocusedInput] = useState(null);
 
-  const googleAuth = useOAuth({ strategy: "oauth_google" });
+  const { startOAuthFlow: startGoogleOAuth } = useOAuth({
+    strategy: "oauth_google",
+  });
+  const { startOAuthFlow: startFacebookOAuth } = useOAuth({
+    strategy: "oauth_facebook",
+  });
 
-  // Sync Clerk user -> Supabase
-  const syncUserToSupabase = async () => {
-    try {
-      if (!user) return;
-
-      // รับ token จาก Clerk
-      const token = await user.getToken({ template: "supabase" });
-      if (!token) throw new Error("No token from Clerk");
-
-      // ตั้งค่า auth ให้ Supabase
-      const { error: authError } = await supabase.auth.setSession({
-        access_token: token,
-        refresh_token: "",
-      });
-
-      if (authError) {
-        console.log("❌ Supabase auth error:", authError);
-        return;
-      }
-
-      // ตรวจสอบว่ามีผู้ใช้ใน Supabase แล้วหรือยัง
-      const { data: existingUser, error: selectError } = await supabase
-        .from("users")
-        .select("clerk_id")
-        .eq("clerk_id", user.id)
-        .single();
-
-      if (selectError && selectError.code !== "PGRST116") {
-        console.log("❌ Error checking user:", selectError);
-      }
-
-      // ถ้ายังไม่มีผู้ใช้ ให้เพิ่มใหม่
-      if (!existingUser) {
-        const { data, error: upsertError } = await supabase
-          .from("users")
-          .upsert({
-            clerk_id: user.id,
-            email: user.primaryEmailAddress?.emailAddress,
-            full_name: user.fullName,
-            avatar_url: user.imageUrl,
-            bio: "",
-          });
-
-        if (upsertError) {
-          console.log("❌ Supabase upsert error:", upsertError);
-        } else {
-          console.log("✅ Supabase upsert success:", data);
-        }
-      } else {
-        console.log("✅ User already exists in Supabase");
-      }
-
-      // ไปหน้า home หลังจาก sync สำเร็จ
-      router.replace("/home");
-    } catch (err) {
-      console.error("❌ Sync failed:", err);
-    }
+  // ฟังก์ชันสำหรับกลับไปหน้า Home
+  const handleBack = () => {
+    router.replace("/"); // หรือใช้ router.back() เพื่อกลับไปหน้าก่อนหน้า
   };
 
-  useEffect(() => {
-    if (isSignedIn && user) {
-      console.log("✅ User is signed in, syncing to Supabase");
-      syncUserToSupabase();
-    }
-  }, [isSignedIn, user]);
-
-  // Google Login
-  const handleGoogleLogin = async () => {
+  const onSignInPress = async () => {
+    if (!isLoaded) return;
+    setLoading(true);
     try {
-      setLoading(true);
-      const result = await googleAuth.startOAuthFlow();
-
-      if (result?.createdSessionId && user) {
-        console.log("✅ Google login success");
-
-        // ดึง token จาก Clerk
-        const token = await user.getToken({ template: "supabase" });
-        if (!token) throw new Error("No token from Clerk");
-
-        // login Supabase ด้วย token
-        const { data: supaData, error: supaError } =
-          await supabase.auth.signInWithIdToken({
-            provider: "clerk",
-            token,
-          });
-
-        if (supaError) throw supaError;
-
-        // upsert user ลง table users
-        await supabase.from("users").upsert({
-          clerk_id: user.id,
-          email: user.primaryEmailAddress?.emailAddress,
-          full_name: user.fullName,
-          avatar_url: user.imageUrl,
-          bio: "",
-        });
-
-        // ไปหน้า home
-        router.replace("/home");
-      } else {
-        Alert.alert("Login failed", "No session created");
-      }
-    } catch (err) {
-      console.error("❌ Google login error:", err);
-      Alert.alert("Error", "Login failed");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Email Login
-  const handleEmailLogin = async () => {
-    try {
-      setLoading(true);
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
+      const result = await signIn.create({
+        identifier: emailAddress,
         password,
       });
 
-      if (error) throw error;
-
-      // Upsert user to Supabase table
-      await supabase.from("users").upsert({
-        id: data.user.id,
-        email: data.user.email,
-        full_name: data.user.user_metadata?.full_name || "",
-        avatar_url: data.user.user_metadata?.avatar_url || "",
-        bio: "",
-      });
-
-      console.log("✅ Email login success");
-      router.replace("/home");
+      if (result.status === "complete") {
+        await setActive({ session: result.createdSessionId });
+        router.replace("/");
+      } else {
+        console.log("Incomplete login:", result);
+      }
     } catch (err) {
-      console.error("❌ Email login error:", err);
-      Alert.alert("Login failed", err.message);
+      console.error("Sign in error:", err);
+      Alert.alert(
+        "เข้าสู่ระบบไม่สำเร็จ",
+        err.errors?.[0]?.message || "กรุณาตรวจสอบอีเมลหรือรหัสผ่านอีกครั้ง"
+      );
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleOAuthSignIn = async (provider) => {
+    try {
+      const startOAuth =
+        provider === "google" ? startGoogleOAuth : startFacebookOAuth;
+
+      const {
+        createdSessionId,
+        signIn,
+        signUp,
+        setActive: oauthSetActive,
+      } = await startOAuth();
+
+      if (createdSessionId) {
+        await oauthSetActive({ session: createdSessionId });
+        router.replace("/");
+      } else {
+        console.log("OAuth incomplete:", signIn, signUp);
+      }
+    } catch (err) {
+      console.error(`${provider} OAuth error:`, err);
+      Alert.alert(
+        "เข้าสู่ระบบไม่สำเร็จ",
+        `ไม่สามารถเข้าสู่ระบบด้วย ${
+          provider === "google" ? "Google" : "Facebook"
+        } ได้`
+      );
     }
   };
 
   return (
-    <>
-      <StatusBar
-        barStyle="light-content"
-        translucent
-        backgroundColor="transparent"
-      />
-      <LinearGradient colors={["#667eea", "#764ba2"]} style={styles.container}>
-        <ImageBackground
-          source={{
-            uri: "https://images.unsplash.com/photo-1601758228041-f3b2795255f1?auto=format&fit=crop&w=1000&q=80",
-          }}
-          style={styles.backgroundImage}
-          imageStyle={{ opacity: 0.3 }}
-        >
-          <View style={styles.overlay}>
-            <View style={styles.header}>
-              <View style={styles.iconContainer}>
-                <Ionicons name="heart" size={40} color="#FF6B6B" />
-                <Ionicons name="paw" size={35} color="#4ECDC4" />
-              </View>
-              <Text style={styles.title}>Stray Dog Care</Text>
-              <Text style={styles.subtitle}>ร่วมกันช่วยเหลือสัตว์น้อย</Text>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      style={styles.container}
+    >
+      {/* เพิ่มปุ่มย้อนกลับด้านบน */}
+      <TouchableOpacity style={styles.backButton} onPress={handleBack}>
+        <Ionicons
+          name="arrow-back"
+          size={24}
+          color={Colors.PURPLE || "#8B5CF6"}
+        />
+      </TouchableOpacity>
+
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={styles.header}>
+          <View style={styles.iconContainer}>
+            <Text style={styles.pawIcon}>🐾</Text>
+          </View>
+          <Text style={styles.title}>ยินดีต้อนรับกลับ</Text>
+          <Text style={styles.subtitle}>
+            เข้าสู่ระบบเพื่อช่วยเหลือน้องหมาแมวจรจัด
+          </Text>
+        </View>
+
+        <View style={styles.card}>
+          <View style={styles.inputWrapper}>
+            <View style={styles.inputIcon}>
+              <Text style={styles.iconEmoji}>✉️</Text>
             </View>
-
-            <View style={styles.formContainer}>
-              <View style={styles.inputContainer}>
-                <Ionicons
-                  name="mail-outline"
-                  size={20}
-                  color="#666"
-                  style={styles.inputIcon}
-                />
-                <TextInput
-                  placeholder="อีเมล"
-                  placeholderTextColor="#999"
-                  value={email}
-                  onChangeText={setEmail}
-                  style={styles.input}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                />
-              </View>
-
-              <View style={styles.inputContainer}>
-                <Ionicons
-                  name="lock-closed-outline"
-                  size={20}
-                  color="#666"
-                  style={styles.inputIcon}
-                />
-                <TextInput
-                  placeholder="รหัสผ่าน"
-                  placeholderTextColor="#999"
-                  value={password}
-                  secureTextEntry={!showPassword}
-                  onChangeText={setPassword}
-                  style={styles.input}
-                />
-                <TouchableOpacity
-                  onPress={() => setShowPassword(!showPassword)}
-                  style={styles.eyeIcon}
-                >
-                  <Ionicons
-                    name={showPassword ? "eye-outline" : "eye-off-outline"}
-                    size={20}
-                    color="#666"
-                  />
-                </TouchableOpacity>
-              </View>
-
-              <TouchableOpacity
-                style={styles.primaryButton}
-                onPress={handleEmailLogin}
-                disabled={loading}
-              >
-                {loading ? (
-                  <ActivityIndicator color="#fff" size="small" />
-                ) : (
-                  <Text style={styles.buttonText}>เข้าสู่ระบบ</Text>
-                )}
-              </TouchableOpacity>
-
-              <Text style={styles.orText}>หรือ</Text>
-
-              <TouchableOpacity
-                style={styles.socialButton}
-                onPress={handleGoogleLogin}
-                disabled={loading}
-              >
-                <Ionicons name="logo-google" size={20} color="#DB4437" />
-                <Text style={[styles.buttonText, { color: "#333" }]}>
-                  เข้าสู่ระบบด้วย Google
-                </Text>
-                {loading && <ActivityIndicator color="#333" size="small" />}
-              </TouchableOpacity>
+            <View style={styles.inputContent}>
+              <Text style={styles.label}>อีเมล</Text>
+              <TextInput
+                style={[
+                  styles.input,
+                  focusedInput === "email" && styles.inputFocused,
+                ]}
+                placeholder="your@email.com"
+                placeholderTextColor="#B0B0B0"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                value={emailAddress}
+                onChangeText={setEmailAddress}
+                onFocus={() => setFocusedInput("email")}
+                onBlur={() => setFocusedInput(null)}
+              />
             </View>
           </View>
-        </ImageBackground>
-      </LinearGradient>
-    </>
+
+          <View style={styles.inputWrapper}>
+            <View style={styles.inputIcon}>
+              <Text style={styles.iconEmoji}>🔒</Text>
+            </View>
+            <View style={styles.inputContent}>
+              <Text style={styles.label}>รหัสผ่าน</Text>
+              <TextInput
+                style={[
+                  styles.input,
+                  focusedInput === "password" && styles.inputFocused,
+                ]}
+                placeholder="••••••••"
+                placeholderTextColor="#B0B0B0"
+                secureTextEntry
+                value={password}
+                onChangeText={setPassword}
+                onFocus={() => setFocusedInput("password")}
+                onBlur={() => setFocusedInput(null)}
+              />
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={[styles.button, loading && styles.buttonDisabled]}
+            onPress={onSignInPress}
+            disabled={loading}
+            activeOpacity={0.8}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <>
+                <Text style={styles.buttonText}>เข้าสู่ระบบ</Text>
+              </>
+            )}
+          </TouchableOpacity>
+
+          <View style={styles.divider}>
+            <View style={styles.line} />
+            <Text style={styles.dividerText}>หรือ</Text>
+            <View style={styles.line} />
+          </View>
+
+          <TouchableOpacity
+            style={styles.socialButton}
+            onPress={() => handleOAuthSignIn("google")}
+            activeOpacity={0.7}
+          >
+            <View style={styles.socialButtonContent}>
+              <View style={styles.googleIconContainer}>
+                <Text style={styles.googleIcon}>G</Text>
+              </View>
+              <Text style={styles.socialButtonText}>
+                เข้าสู่ระบบด้วย Google
+              </Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.footer}>
+          <View style={styles.petIcons}></View>
+          <Text style={styles.footerText}>ยังไม่มีบัญชี? </Text>
+          <Link href="/register" asChild>
+            <TouchableOpacity>
+              <Text style={styles.linkText}>สมัครสมาชิกฟรี</Text>
+            </TouchableOpacity>
+          </Link>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  backgroundImage: { flex: 1, width, height },
-  overlay: {
+  container: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.4)",
+    backgroundColor: "#FFF8F0",
+  },
+  // เพิ่มสไตล์ปุ่มย้อนกลับ
+  backButton: {
+    position: "absolute",
+    top: Platform.OS === "ios" ? 50 : 40,
+    left: 20,
+    zIndex: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#FFF",
+    alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 30,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  header: { alignItems: "center", marginBottom: 30 },
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: "center",
+    padding: 24,
+    paddingTop: 60,
+    paddingBottom: 40,
+  },
+  header: {
+    alignItems: "center",
+    marginBottom: 32,
+  },
   iconContainer: {
-    flexDirection: "row",
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: "#FFF",
     alignItems: "center",
-    marginBottom: 15,
+    justifyContent: "center",
+    marginBottom: 20,
+    shadowColor: Colors.PURPLE,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 5,
   },
-  title: { fontSize: 36, fontWeight: "bold", color: "#fff" },
+  pawIcon: {
+    fontSize: 48,
+  },
+  title: {
+    fontSize: 30,
+    fontWeight: "800",
+    color: Colors.PURPLE || "#8B5CF6",
+    marginBottom: 8,
+    textAlign: "center",
+  },
   subtitle: {
-    fontSize: 16,
-    color: "#f0f0f0",
+    fontSize: 15,
+    color: "#666",
     textAlign: "center",
-    opacity: 0.9,
+    lineHeight: 22,
+    paddingHorizontal: 20,
   },
-  formContainer: {},
-  inputContainer: {
+  card: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 24,
+    padding: 24,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 3,
+  },
+  inputWrapper: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.9)",
-    borderRadius: 15,
-    marginBottom: 15,
-    paddingHorizontal: 15,
+    marginBottom: 20,
+    backgroundColor: "#F8F8F8",
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 2,
+    borderColor: "#F0F0F0",
   },
-  inputIcon: { marginRight: 10 },
-  input: { flex: 1, paddingVertical: 14, fontSize: 16, color: "#333" },
-  eyeIcon: { padding: 5 },
-  primaryButton: {
-    backgroundColor: "#FF6B6B",
-    paddingVertical: 14,
-    borderRadius: 15,
-    marginTop: 10,
+  inputIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: "#FFF",
     alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
   },
-  buttonText: { color: "#fff", fontWeight: "600", fontSize: 16 },
-  orText: {
-    textAlign: "center",
-    marginVertical: 15,
-    color: "#fff",
-    fontWeight: "bold",
+  iconEmoji: {
+    fontSize: 20,
+  },
+  inputContent: {
+    flex: 1,
+  },
+  label: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#888",
+    marginBottom: 4,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  input: {
+    fontSize: 16,
+    color: "#1A1A1A",
+    padding: 0,
+    fontWeight: "500",
+  },
+  inputFocused: {
+    color: Colors.PURPLE || "#8B5CF6",
+  },
+  button: {
+    backgroundColor: Colors.PURPLE || "#8B5CF6",
+    padding: 18,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    marginTop: 8,
+    shadowColor: Colors.PURPLE || "#8B5CF6",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 6,
+  },
+  buttonDisabled: {
+    opacity: 0.6,
+  },
+  buttonText: {
+    color: "#FFF",
+    fontSize: 17,
+    fontWeight: "700",
+    marginRight: 8,
+  },
+  buttonEmoji: {
+    fontSize: 18,
+  },
+  divider: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: 28,
+  },
+  line: {
+    flex: 1,
+    height: 1,
+    backgroundColor: "#E8E8E8",
+  },
+  dividerText: {
+    marginHorizontal: 16,
+    color: "#999",
+    fontSize: 13,
+    fontWeight: "600",
   },
   socialButton: {
+    backgroundColor: "#FFF",
+    borderWidth: 2,
+    borderColor: "#E8E8E8",
+    borderRadius: 16,
+    padding: 16,
+    alignItems: "center",
+  },
+  socialButtonContent: {
     flexDirection: "row",
     alignItems: "center",
+  },
+  googleIconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: "#F8F9FA",
+    alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#fff",
-    paddingVertical: 14,
-    borderRadius: 15,
-    gap: 10,
+    marginRight: 12,
+  },
+  googleIcon: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#4285F4",
+  },
+  socialButtonText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#333",
+  },
+  footer: {
+    alignItems: "center",
+    marginTop: 32,
+  },
+  petIcons: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 12,
+  },
+  petIcon: {
+    fontSize: 28,
+  },
+  footerText: {
+    fontSize: 15,
+    color: "#666",
+    marginBottom: 4,
+  },
+  linkText: {
+    fontSize: 16,
+    color: Colors.PURPLE || "#8B5CF6",
+    fontWeight: "700",
+    textDecorationLine: "underline",
   },
 });

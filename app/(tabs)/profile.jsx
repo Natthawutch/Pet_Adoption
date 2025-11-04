@@ -1,10 +1,8 @@
-import { useClerk, useUser } from "@clerk/clerk-expo";
+import { useAuth, useUser } from "@clerk/clerk-expo";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
-import * as SecureStore from "expo-secure-store";
 import { useEffect, useState } from "react";
-
 import {
   ActivityIndicator,
   Alert,
@@ -27,6 +25,7 @@ const imageSize = (screenWidth - 6) / 3;
 export default function Profile() {
   const router = useRouter();
   const { user } = useUser();
+  const { getToken, signOut } = useAuth();
 
   const [profileUser, setProfileUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -41,14 +40,17 @@ export default function Profile() {
     }
 
     const fetchUserData = async () => {
-      setLoading(true);
       try {
-        const clerkToken = await SecureStore.getItemAsync("clerkToken");
-        if (!clerkToken) throw new Error("No Clerk token found!");
+        setLoading(true);
 
-        const supabaseClerk = createClerkSupabaseClient(clerkToken);
+        // ดึง Clerk token สำหรับ Supabase
+        const token = await getToken({ template: "supabase" });
+        if (!token) throw new Error("No Clerk token found");
 
-        const { data: profile, error: profileError } = await supabaseClerk
+        const supabase = createClerkSupabaseClient(token);
+
+        // ดึงข้อมูลผู้ใช้
+        const { data: profile, error: profileError } = await supabase
           .from("users")
           .select(
             `
@@ -68,7 +70,7 @@ export default function Profile() {
           following: profile?.following?.[0]?.count || 0,
         });
 
-        await fetchPosts(supabaseClerk, user.id);
+        await fetchPosts(supabase, user.id);
       } catch (error) {
         console.error("Failed to load profile:", error);
         Alert.alert("Error", "Failed to load user data");
@@ -81,9 +83,9 @@ export default function Profile() {
     fetchUserData();
   }, [user]);
 
-  const fetchPosts = async (supabaseClerk, userId) => {
+  const fetchPosts = async (supabase, userId) => {
     try {
-      const { data, error } = await supabaseClerk
+      const { data, error } = await supabase
         .from("posts")
         .select("id, media_url, caption, created_at, likes")
         .eq("user_id", userId)
@@ -119,27 +121,29 @@ export default function Profile() {
 
       setUploading(true);
 
-      const clerkToken = await SecureStore.getItemAsync("clerkToken");
-      const supabaseClerk = createClerkSupabaseClient(clerkToken);
+      const token = await getToken({ template: "supabase" });
+      const supabase = createClerkSupabaseClient(token);
 
       const uri = result.assets[0].uri;
       const filename = `avatars/${user.id}/${Date.now()}.jpg`;
 
-      const { error: uploadError } = await supabaseClerk.storage
+      // Upload รูปไป Supabase storage
+      const { error: uploadError } = await supabase.storage
         .from("user-avatars")
         .upload(
           filename,
           { uri, type: "image/jpeg", name: filename },
-          { cacheControl: "3600", upsert: true }
+          { upsert: true }
         );
 
       if (uploadError) throw uploadError;
 
       const {
         data: { publicUrl },
-      } = supabaseClerk.storage.from("user-avatars").getPublicUrl(filename);
+      } = supabase.storage.from("user-avatars").getPublicUrl(filename);
 
-      const { error: updateError } = await supabaseClerk
+      // Update avatar_url ใน table users
+      const { error: updateError } = await supabase
         .from("users")
         .update({ avatar_url: publicUrl })
         .eq("id", user.id);
@@ -156,49 +160,32 @@ export default function Profile() {
     }
   };
 
-  // --- ฟังก์ชัน Logout ---
-  const { signOut } = useClerk();
-
-const handleLogout = async () => {
-  Alert.alert(
-    "ยืนยันการออกจากระบบ",
-    "คุณต้องการออกจากระบบใช่หรือไม่?",
-    [
-      {
-        text: "ยกเลิก",
-        style: "cancel",
-      },
+  const handleLogout = async () => {
+    Alert.alert("ยืนยันการออกจากระบบ", "คุณต้องการออกจากระบบใช่หรือไม่?", [
+      { text: "ยกเลิก", style: "cancel" },
       {
         text: "ออกจากระบบ",
         style: "destructive",
         onPress: async () => {
           try {
-            // Sign out จาก Clerk + OAuth
             await signOut();
-
-            // ลบ token local
-            await SecureStore.deleteItemAsync("clerkToken");
-
-            // ไปหน้า Login
-            router.replace("/login");
+            router.replace("/home");
           } catch (error) {
             console.error("Logout failed:", error);
             Alert.alert("Logout failed", "กรุณาลองใหม่อีกครั้ง");
           }
         },
       },
-    ],
-    { cancelable: true }
-  );
-};
+    ]);
+  };
 
   const onRefresh = async () => {
     setRefreshing(true);
     try {
-      const clerkToken = await SecureStore.getItemAsync("clerkToken");
-      const supabaseClerk = createClerkSupabaseClient(clerkToken);
+      const token = await getToken({ template: "supabase" });
+      const supabase = createClerkSupabaseClient(token);
       if (user?.id) {
-        await fetchPosts(supabaseClerk, user.id);
+        await fetchPosts(supabase, user.id);
       }
     } catch (error) {
       console.error("Refresh failed:", error);
@@ -227,7 +214,7 @@ const handleLogout = async () => {
         />
       }
     >
-      {/* ส่วนหัวโปรไฟล์ */}
+      {/* Header */}
       <View style={styles.header}>
         <View style={styles.avatarContainer}>
           <TouchableOpacity onPress={handleImagePick} disabled={uploading}>
@@ -268,7 +255,7 @@ const handleLogout = async () => {
         </View>
       </View>
 
-      {/* ข้อมูลผู้ใช้ */}
+      {/* User Info */}
       <View style={styles.userInfo}>
         <Text style={styles.fullName}>
           {profileUser.full_name || "ผู้ใช้ไม่ระบุชื่อ"}
@@ -283,7 +270,7 @@ const handleLogout = async () => {
         </Text>
       </View>
 
-      {/* ปุ่มดำเนินการ */}
+      {/* Action Buttons */}
       <View style={styles.actionButtons}>
         <TouchableOpacity
           onPress={() => router.push("/edit-profile/EditProfile")}
@@ -306,7 +293,7 @@ const handleLogout = async () => {
         </TouchableOpacity>
       </View>
 
-      {/* ส่วนโพสต์ */}
+      {/* Posts Section */}
       <View style={styles.postsSection}>
         <View style={styles.postsSectionHeader}>
           <Ionicons name="grid-outline" size={20} color="#666" />
