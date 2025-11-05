@@ -7,6 +7,7 @@ export default {
     version: "1.0.0",
     scheme: "petadoption",
     android: {
+      package: "com.cmru.petadoption", // 👈 เพิ่มบรรทัดนี้
       usesCleartextTraffic: true, // จำเป็นสำหรับ Android
       intentFilters: [
         {
