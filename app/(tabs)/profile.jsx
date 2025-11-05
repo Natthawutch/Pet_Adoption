@@ -20,7 +20,7 @@ import { createClerkSupabaseClient } from "../../config/supabaseClient";
 import Colors from "../../constants/Colors";
 
 const screenWidth = Dimensions.get("window").width;
-const imageSize = (screenWidth - 6) / 3;
+const imageSize = (screenWidth - 8) / 3;
 
 export default function Profile() {
   const router = useRouter();
@@ -42,15 +42,11 @@ export default function Profile() {
     const fetchUserData = async () => {
       try {
         setLoading(true);
-
-        // ดึง Clerk token สำหรับ Supabase
         const token = await getToken({ template: "supabase" });
         if (!token) throw new Error("No Clerk token found");
-
         const supabase = createClerkSupabaseClient(token);
 
-        // ดึงข้อมูลผู้ใช้
-        const { data: profile, error: profileError } = await supabase
+        const { data: profile, error } = await supabase
           .from("users")
           .select(
             `
@@ -62,7 +58,7 @@ export default function Profile() {
           .eq("id", user.id)
           .maybeSingle();
 
-        if (profileError) throw profileError;
+        if (error) throw error;
 
         setProfileUser({
           ...profile,
@@ -71,10 +67,9 @@ export default function Profile() {
         });
 
         await fetchPosts(supabase, user.id);
-      } catch (error) {
-        console.error("Failed to load profile:", error);
-        Alert.alert("Error", "Failed to load user data");
-        router.replace("/login");
+      } catch (err) {
+        console.error("Failed to load profile:", err);
+        Alert.alert("Error", "ไม่สามารถโหลดข้อมูลผู้ใช้ได้");
       } finally {
         setLoading(false);
       }
@@ -84,18 +79,12 @@ export default function Profile() {
   }, [user]);
 
   const fetchPosts = async (supabase, userId) => {
-    try {
-      const { data, error } = await supabase
-        .from("posts")
-        .select("id, media_url, caption, created_at, likes")
-        .eq("user_id", userId)
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
-      setPosts(data || []);
-    } catch (error) {
-      console.error("Failed to fetch posts:", error);
-    }
+    const { data, error } = await supabase
+      .from("posts")
+      .select("id, media_url, caption, created_at, likes")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false });
+    if (!error) setPosts(data || []);
   };
 
   const handleImagePick = async () => {
@@ -103,10 +92,7 @@ export default function Profile() {
       const { status } =
         await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== "granted") {
-        Alert.alert(
-          "Permission required",
-          "Need camera roll access to upload images"
-        );
+        Alert.alert("Permission required", "กรุณาอนุญาตเข้าถึงคลังภาพ");
         return;
       }
 
@@ -114,7 +100,7 @@ export default function Profile() {
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [1, 1],
-        quality: 0.7,
+        quality: 0.8,
       });
 
       if (result.canceled || !result.assets?.[0]?.uri) return;
@@ -123,11 +109,9 @@ export default function Profile() {
 
       const token = await getToken({ template: "supabase" });
       const supabase = createClerkSupabaseClient(token);
-
       const uri = result.assets[0].uri;
       const filename = `avatars/${user.id}/${Date.now()}.jpg`;
 
-      // Upload รูปไป Supabase storage
       const { error: uploadError } = await supabase.storage
         .from("user-avatars")
         .upload(
@@ -138,42 +122,35 @@ export default function Profile() {
 
       if (uploadError) throw uploadError;
 
-      const {
-        data: { publicUrl },
-      } = supabase.storage.from("user-avatars").getPublicUrl(filename);
-
-      // Update avatar_url ใน table users
+      const { data } = supabase.storage
+        .from("user-avatars")
+        .getPublicUrl(filename);
       const { error: updateError } = await supabase
         .from("users")
-        .update({ avatar_url: publicUrl })
+        .update({ avatar_url: data.publicUrl })
         .eq("id", user.id);
 
       if (updateError) throw updateError;
 
-      setProfileUser((prev) => ({ ...prev, avatar_url: publicUrl }));
-      Alert.alert("Success", "Profile picture updated");
-    } catch (error) {
-      console.error("Upload failed:", error);
-      Alert.alert("Upload failed", error.message);
+      setProfileUser((prev) => ({ ...prev, avatar_url: data.publicUrl }));
+      Alert.alert("สำเร็จ", "อัปเดตรูปโปรไฟล์แล้ว");
+    } catch (err) {
+      console.error("Upload failed:", err);
+      Alert.alert("Upload failed", err.message);
     } finally {
       setUploading(false);
     }
   };
 
   const handleLogout = async () => {
-    Alert.alert("ยืนยันการออกจากระบบ", "คุณต้องการออกจากระบบใช่หรือไม่?", [
+    Alert.alert("ออกจากระบบ", "คุณแน่ใจหรือไม่?", [
       { text: "ยกเลิก", style: "cancel" },
       {
         text: "ออกจากระบบ",
         style: "destructive",
         onPress: async () => {
-          try {
-            await signOut();
-            router.replace("/login");
-          } catch (error) {
-            console.error("Logout failed:", error);
-            Alert.alert("Logout failed", "กรุณาลองใหม่อีกครั้ง");
-          }
+          await signOut();
+          router.replace("/login");
         },
       },
     ]);
@@ -184,11 +161,7 @@ export default function Profile() {
     try {
       const token = await getToken({ template: "supabase" });
       const supabase = createClerkSupabaseClient(token);
-      if (user?.id) {
-        await fetchPosts(supabase, user.id);
-      }
-    } catch (error) {
-      console.error("Refresh failed:", error);
+      if (user?.id) await fetchPosts(supabase, user.id);
     } finally {
       setRefreshing(false);
     }
@@ -198,7 +171,7 @@ export default function Profile() {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={Colors.PURPLE} />
-        <Text style={styles.loadingText}>กำลังโหลดโปรไฟล์...</Text>
+        <Text style={styles.loadingText}>กำลังโหลดข้อมูล...</Text>
       </View>
     );
   }
@@ -207,134 +180,105 @@ export default function Profile() {
     <ScrollView
       style={styles.container}
       refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={onRefresh}
-          colors={[Colors.PURPLE]}
-        />
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
       }
     >
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.avatarContainer}>
-          <TouchableOpacity onPress={handleImagePick} disabled={uploading}>
-            <View style={styles.avatarWrapper}>
-              <Image
-                source={{
-                  uri:
-                    profileUser.avatar_url ||
-                    "https://www.gravatar.com/avatar/?d=mp",
-                }}
-                style={styles.avatar}
-              />
-              {uploading && (
-                <View style={styles.uploadingOverlay}>
-                  <ActivityIndicator size="small" color="#fff" />
-                </View>
-              )}
-              <View style={styles.editIcon}>
-                <Ionicons name="camera" size={16} color="#fff" />
+      {/* 🪪 Profile Card */}
+      <View style={styles.profileCard}>
+        <TouchableOpacity onPress={handleImagePick} disabled={uploading}>
+          <View style={styles.avatarWrapper}>
+            <Image
+              source={{
+                uri:
+                  user?.imageUrl ||
+                  profileUser.avatar_url ||
+                  "https://www.gravatar.com/avatar/?d=mp",
+              }}
+              style={styles.avatar}
+            />
+            {uploading && (
+              <View style={styles.overlay}>
+                <ActivityIndicator color="#fff" />
               </View>
+            )}
+            <View style={styles.cameraIcon}>
+              <Ionicons name="camera" size={16} color="#fff" />
             </View>
-          </TouchableOpacity>
-        </View>
+          </View>
+        </TouchableOpacity>
 
-        <View style={styles.statsContainer}>
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{posts.length}</Text>
+        <Text style={styles.name}>
+          {user?.fullName || profileUser?.full_name || "ผู้ใช้ไม่ระบุชื่อ"}
+        </Text>
+        <Text style={styles.email}>
+          {user?.primaryEmailAddress?.emailAddress}
+        </Text>
+        <Text style={styles.bio}>
+          {profileUser.bio || "ยังไม่มีคำอธิบายส่วนตัว"}
+        </Text>
+
+        <View style={styles.statsRow}>
+          <View style={styles.statBox}>
+            <Text style={styles.statValue}>{posts.length}</Text>
             <Text style={styles.statLabel}>โพสต์</Text>
           </View>
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{profileUser.followers}</Text>
+          <View style={styles.statBox}>
+            <Text style={styles.statValue}>{profileUser.followers}</Text>
             <Text style={styles.statLabel}>ผู้ติดตาม</Text>
           </View>
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{profileUser.following}</Text>
+          <View style={styles.statBox}>
+            <Text style={styles.statValue}>{profileUser.following}</Text>
             <Text style={styles.statLabel}>กำลังติดตาม</Text>
           </View>
         </View>
-      </View>
 
-      {/* User Info */}
-      <View style={styles.userInfo}>
-        <Text style={styles.fullName}>
-          {profileUser.full_name || "ผู้ใช้ไม่ระบุชื่อ"}
-        </Text>
-        {user?.primaryEmailAddress?.emailAddress && (
-          <Text style={styles.email}>
-            {user.primaryEmailAddress.emailAddress}
-          </Text>
-        )}
-        <Text style={styles.bio}>
-          {profileUser.bio || "ยังไม่มีข้อมูลส่วนตัว"}
-        </Text>
-      </View>
+        {/* ปุ่ม */}
+        <View style={styles.buttonRow}>
+          <TouchableOpacity
+            onPress={() => router.push("/edit-profile/EditProfile")}
+            style={styles.primaryButton}
+          >
+            <Ionicons name="create-outline" size={18} color="#fff" />
+            <Text style={styles.primaryButtonText}>แก้ไขโปรไฟล์</Text>
+          </TouchableOpacity>
 
-      {/* Action Buttons */}
-      <View style={styles.actionButtons}>
-        <TouchableOpacity
-          onPress={() => router.push("/edit-profile/EditProfile")}
-          style={styles.editButton}
-        >
-          <Ionicons name="create-outline" size={18} color={Colors.PURPLE} />
-          <Text style={styles.editButtonText}>แก้ไขโปรไฟล์</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={() => router.push("/settings")}
-          style={styles.settingsButton}
-        >
-          <Ionicons name="settings-outline" size={18} color="#666" />
-        </TouchableOpacity>
-
-        <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
-          <Ionicons name="log-out-outline" size={18} color="#fff" />
-          <Text style={styles.logoutButtonText}>ออกจากระบบ</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Posts Section */}
-      <View style={styles.postsSection}>
-        <View style={styles.postsSectionHeader}>
-          <Ionicons name="grid-outline" size={20} color="#666" />
-          <Text style={styles.postsSectionTitle}>โพสต์ของฉัน</Text>
+          <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
+            <Ionicons name="log-out-outline" size={18} color="#fff" />
+          </TouchableOpacity>
         </View>
+      </View>
 
-        {posts.length > 0 ? (
+      {/* 🖼️ โพสต์ */}
+      <View style={styles.postsSection}>
+        <Text style={styles.sectionTitle}>โพสต์ของฉัน</Text>
+
+        {posts.length ? (
           <FlatList
             data={posts}
             numColumns={3}
             scrollEnabled={false}
             keyExtractor={(item) => item.id.toString()}
-            renderItem={({ item, index }) => (
+            renderItem={({ item }) => (
               <TouchableOpacity
                 onPress={() => router.push(`/post/${item.id}`)}
-                style={{
-                  width: imageSize,
-                  height: imageSize,
-                  marginRight: (index + 1) % 3 === 0 ? 0 : 2,
-                  marginBottom: 2,
-                }}
+                style={styles.postItem}
               >
                 <Image
                   source={{ uri: item.media_url }}
-                  style={{ width: "100%", height: "100%" }}
+                  style={styles.postImage}
                 />
               </TouchableOpacity>
             )}
           />
         ) : (
           <View style={styles.emptyState}>
-            <Ionicons name="camera-outline" size={60} color="#ccc" />
-            <Text style={styles.emptyStateTitle}>ยังไม่มีโพสต์</Text>
-            <Text style={styles.emptyStateSubtitle}>
-              เริ่มแชร์รูปภาพแรกของคุณเลย!
-            </Text>
+            <Ionicons name="images-outline" size={50} color="#aaa" />
+            <Text style={styles.emptyText}>ยังไม่มีโพสต์</Text>
             <TouchableOpacity
               onPress={() => router.push("/create-post")}
-              style={styles.createPostButton}
+              style={styles.newPostButton}
             >
-              <Text style={styles.createPostButtonText}>สร้างโพสต์</Text>
+              <Text style={styles.newPostText}>สร้างโพสต์แรก</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -343,135 +287,102 @@ export default function Profile() {
   );
 }
 
-// --- Styles ---
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff" },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
+  container: { flex: 1, backgroundColor: "#FAFAFA" },
+  loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
+  loadingText: { marginTop: 12, fontSize: 16, color: Colors.PURPLE },
+
+  profileCard: {
+    margin: 20,
     backgroundColor: "#fff",
-  },
-  loadingText: { marginTop: 16, fontSize: 16, color: Colors.PURPLE },
-  header: {
-    flexDirection: "row",
-    padding: 20,
+    borderRadius: 20,
     alignItems: "center",
-    borderBottomWidth: 1,
-    borderBottomColor: "#f0f0f0",
-  },
-  avatarContainer: { marginRight: 20 },
-  avatarWrapper: {
-    position: "relative",
+    paddingVertical: 25,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.05,
     shadowRadius: 6,
     elevation: 3,
   },
-  avatar: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    borderWidth: 2,
-    borderColor: "#fff",
-  },
-  uploadingOverlay: {
+  avatarWrapper: { position: "relative" },
+  avatar: { width: 100, height: 100, borderRadius: 50 },
+  overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.5)",
+    backgroundColor: "rgba(0,0,0,0.4)",
     borderRadius: 50,
     justifyContent: "center",
     alignItems: "center",
   },
-  editIcon: {
+  cameraIcon: {
     position: "absolute",
     bottom: 0,
     right: 0,
     backgroundColor: Colors.PURPLE,
-    borderRadius: 15,
+    borderRadius: 14,
     padding: 6,
   },
-  statsContainer: {
-    flex: 1,
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  statItem: { alignItems: "center", paddingHorizontal: 10 },
-  statNumber: { fontSize: 20, fontWeight: "bold", color: "#333" },
-  statLabel: { fontSize: 14, color: "#666", marginTop: 4 },
-  userInfo: { padding: 20 },
-  fullName: { fontSize: 22, fontWeight: "bold", color: "#333" },
-  email: { fontSize: 16, color: "#666", marginTop: 4 },
-  bio: { fontSize: 16, color: "#444", marginTop: 8, lineHeight: 22 },
-  actionButtons: {
-    flexDirection: "row",
+  name: { fontSize: 20, fontWeight: "700", marginTop: 12, color: "#333" },
+  email: { color: "#777", fontSize: 14, marginTop: 2 },
+  bio: {
+    color: "#555",
+    fontSize: 14,
+    marginTop: 8,
+    textAlign: "center",
     paddingHorizontal: 20,
-    marginBottom: 20,
-    justifyContent: "space-between",
   },
-  editButton: {
+
+  statsRow: {
     flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#f5f5f5",
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: Colors.PURPLE,
+    marginTop: 16,
+    justifyContent: "space-around",
+    width: "80%",
   },
-  editButtonText: { marginLeft: 6, color: Colors.PURPLE, fontWeight: "500" },
-  settingsButton: {
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 10,
-    borderRadius: 8,
-    backgroundColor: "#f5f5f5",
+  statBox: { alignItems: "center" },
+  statValue: { fontSize: 18, fontWeight: "700", color: Colors.PURPLE },
+  statLabel: { color: "#666", fontSize: 13, marginTop: 3 },
+
+  buttonRow: {
+    flexDirection: "row",
+    marginTop: 20,
+    gap: 10,
   },
-  logoutButton: {
+  primaryButton: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: Colors.PURPLE,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderRadius: 10,
   },
-  logoutButtonText: { marginLeft: 6, color: "#fff", fontWeight: "500" },
-  postsSection: {
-    marginTop: 20,
-    borderTopWidth: 1,
-    borderTopColor: "#f0f0f0",
-    paddingTop: 16,
+  primaryButtonText: { color: "#fff", fontWeight: "600", marginLeft: 6 },
+  logoutButton: {
+    backgroundColor: "#f35b5b",
+    padding: 10,
+    borderRadius: 10,
   },
-  postsSectionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    marginBottom: 16,
-  },
-  postsSectionTitle: {
-    marginLeft: 8,
+
+  postsSection: { marginTop: 20, paddingHorizontal: 16 },
+  sectionTitle: {
     fontSize: 18,
-    fontWeight: "600",
+    fontWeight: "700",
+    marginBottom: 12,
     color: "#333",
   },
-  emptyState: {
-    justifyContent: "center",
-    alignItems: "center",
-    paddingVertical: 40,
+  postItem: {
+    width: imageSize,
+    height: imageSize,
+    margin: 1,
+    borderRadius: 8,
+    overflow: "hidden",
   },
-  emptyStateTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#666",
-    marginTop: 12,
-  },
-  emptyStateSubtitle: { fontSize: 14, color: "#999", marginTop: 4 },
-  createPostButton: {
-    marginTop: 20,
+  postImage: { width: "100%", height: "100%" },
+  emptyState: { alignItems: "center", paddingVertical: 50 },
+  emptyText: { color: "#777", marginTop: 10, fontSize: 16 },
+  newPostButton: {
     backgroundColor: Colors.PURPLE,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 24,
+    marginTop: 20,
+    paddingVertical: 10,
+    paddingHorizontal: 22,
+    borderRadius: 20,
   },
-  createPostButtonText: { color: "#fff", fontWeight: "600" },
+  newPostText: { color: "#fff", fontWeight: "600" },
 });

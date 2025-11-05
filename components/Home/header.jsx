@@ -1,12 +1,10 @@
 import { useAuth, useUser } from "@clerk/clerk-expo";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import { useNavigation } from "@react-navigation/native";
-import { BlurView } from "expo-blur";
 import * as Location from "expo-location";
+import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Image,
   StyleSheet,
   Text,
@@ -21,9 +19,9 @@ export default function Header() {
   const [locationText, setLocationText] = useState("Detecting location...");
   const { isSignedIn } = useAuth();
   const { user: clerkUser, isLoaded } = useUser();
-  const navigation = useNavigation();
+  const router = useRouter();
 
-  // โหลดข้อมูลผู้ใช้ Clerk
+  // ✅ โหลดข้อมูลผู้ใช้ Clerk
   useEffect(() => {
     if (isLoaded) {
       if (isSignedIn && clerkUser) {
@@ -39,22 +37,18 @@ export default function Header() {
     }
   }, [isLoaded, isSignedIn, clerkUser]);
 
-  // โหลดตำแหน่งจริงจาก GPS
+  // 📍 โหลดตำแหน่งจริงจาก GPS
   useEffect(() => {
     (async () => {
       try {
-        let { status } = await Location.requestForegroundPermissionsAsync();
+        const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== "granted") {
-          Alert.alert(
-            "Location Permission",
-            "Please enable location permissions in settings."
-          );
           setLocationText("Location unavailable");
           return;
         }
 
-        let location = await Location.getCurrentPositionAsync({});
-        let reverseGeocode = await Location.reverseGeocodeAsync({
+        const location = await Location.getCurrentPositionAsync({});
+        const reverseGeocode = await Location.reverseGeocodeAsync({
           latitude: location.coords.latitude,
           longitude: location.coords.longitude,
         });
@@ -81,97 +75,95 @@ export default function Header() {
   }
 
   return (
-    <BlurView intensity={40} tint="light" style={styles.container}>
-      <View style={styles.inner}>
-        {/* 👤 Avatar (ซ้าย) */}
-        <TouchableOpacity onPress={() => navigation.navigate("(tabs)/profile")}>
+    <View style={styles.container}>
+      {/* 📸 Avatar + Name + Location */}
+      <View style={styles.leftSection}>
+        <TouchableOpacity onPress={() => router.push("/(tabs)/profile")}>
           {user?.avatar_url ? (
             <Image source={{ uri: user.avatar_url }} style={styles.avatar} />
           ) : (
-            <Ionicons name="person-circle-outline" size={36} color="#555" />
+            <Ionicons name="person-circle-outline" size={45} color="#fff" />
           )}
         </TouchableOpacity>
 
-        {/* 📍 Location (กลาง) */}
-        <View style={styles.centerSection}>
-          <Text style={styles.label}>Location</Text>
+        <View style={{ marginLeft: 10 }}>
+          <Text style={styles.userName}>
+            {user?.full_name?.toUpperCase() || "USER"}
+          </Text>
           <View style={styles.locationRow}>
-            <Ionicons name="location-sharp" size={18} color="#0077FF" />
+            <Ionicons name="location-sharp" size={14} color="#fff" />
             <Text style={styles.locationText} numberOfLines={1}>
               {locationText}
             </Text>
           </View>
         </View>
-
-        {/* ❤️ 💬 Favorite + Inbox (ขวา) */}
-        <View style={styles.rightIcons}>
-          <TouchableOpacity
-            style={styles.icon}
-            onPress={() => navigation.navigate("Favorite/favorite")}
-          >
-            <Ionicons name="heart" size={24} color="#FF6B6B" />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.icon}
-            onPress={() => navigation.navigate("Inbox/inbox")}
-          >
-            <MaterialCommunityIcons
-              name="message-badge"
-              size={26}
-              color="#333"
-            />
-            {inboxCount > 0 && (
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>
-                  {inboxCount > 9 ? "9+" : inboxCount}
-                </Text>
-              </View>
-            )}
-          </TouchableOpacity>
-        </View>
       </View>
-    </BlurView>
+
+      {/* ❤️ 💬 Favorite + Inbox */}
+      <View style={styles.rightIcons}>
+        <TouchableOpacity
+          style={styles.icon}
+          onPress={() => router.push("/Favorite/favorite")}
+        >
+          <Ionicons name="heart" size={22} color="#fff" />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.icon}
+          onPress={() => router.push("/Inbox/inbox")}
+        >
+          <MaterialCommunityIcons name="message-badge" size={24} color="#fff" />
+          {inboxCount > 0 && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>
+                {inboxCount > 9 ? "9+" : inboxCount}
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    paddingTop: 55,
-    paddingHorizontal: 18,
-    paddingBottom: 12,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
-    overflow: "hidden",
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowOffset: { width: 0, height: 3 },
-    shadowRadius: 6,
-  },
-  inner: {
+    backgroundColor: "#b226beff", // สีพีชอ่อนแบบในภาพ
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    paddingTop: 50,
+    paddingHorizontal: 18,
+    paddingBottom: 15,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
   },
-  centerSection: {
+  leftSection: {
+    flexDirection: "row",
     alignItems: "center",
     flex: 1,
   },
-  label: {
-    fontSize: 13,
-    color: "#888",
-    marginBottom: 2,
+  userName: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 16,
   },
   locationRow: {
     flexDirection: "row",
     alignItems: "center",
-    maxWidth: "90%",
+    marginTop: 2,
   },
   locationText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#1e1e1e",
+    color: "#fff",
+    fontSize: 13,
     marginLeft: 4,
+  },
+  avatar: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    borderWidth: 2,
+    borderColor: "#fff",
   },
   rightIcons: {
     flexDirection: "row",
@@ -179,16 +171,16 @@ const styles = StyleSheet.create({
   },
   icon: {
     position: "relative",
-    marginLeft: 10,
+    marginLeft: 15,
   },
   badge: {
     position: "absolute",
-    top: -5,
-    right: -5,
+    top: -4,
+    right: -6,
     backgroundColor: "#FF6B6B",
     borderRadius: 8,
-    minWidth: 16,
-    height: 16,
+    minWidth: 15,
+    height: 15,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -196,13 +188,6 @@ const styles = StyleSheet.create({
     color: "white",
     fontSize: 9,
     fontWeight: "bold",
-  },
-  avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    borderWidth: 1.5,
-    borderColor: "#fff",
   },
   loadingContainer: {
     height: 80,

@@ -1,6 +1,7 @@
+import { useAuth, useUser } from "@clerk/clerk-expo";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
-import { useRouter } from "expo-router"; // ✅ ใช้ router จาก expo-router
+import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -17,65 +18,64 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { supabase } from "../../config/supabaseClient";
+import { createClerkSupabaseClient } from "../../config/supabaseClient";
 
 export default function EditProfile() {
-  const router = useRouter(); // ✅ ใช้แทน navigation
-  const [user, setUser] = useState(null);
-  const [fullname, setFullname] = useState("");
-  const [email, setEmail] = useState("");
+  const router = useRouter();
+  const { user } = useUser();
+  const { getToken } = useAuth();
+
   const [phone, setPhone] = useState("");
   const [avatarUrl, setAvatarUrl] = useState(null);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
 
-  const fetchUserProfile = async () => {
+  // ✅ ดึงข้อมูลโปรไฟล์จาก Supabase
+  const fetchProfile = async () => {
+    if (!user) return;
     setLoading(true);
     try {
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
-
-      if (userError || !user) {
-        Alert.alert("ข้อผิดพลาด", "ไม่สามารถโหลดข้อมูลผู้ใช้ได้");
-        setLoading(false);
-        return;
-      }
+      const token = await getToken({ template: "supabase" });
+      const supabase = createClerkSupabaseClient(token);
 
       const { data, error } = await supabase
         .from("profiles")
-        .select("*")
+        .select("phone, avatar_url")
         .eq("id", user.id)
-        .single();
+        .maybeSingle();
 
-      if (error) {
-        if (error.code === "PGRST116") {
-          setUser(user);
-          setEmail(user.email);
-        } else {
-          Alert.alert("ข้อผิดพลาด", "ไม่พบข้อมูลผู้ใช้");
-        }
-      } else {
-        setUser(user);
-        setFullname(data.fullname || "");
-        setEmail(user.email || "");
+      if (error) throw error;
+
+      if (data) {
         setPhone(data.phone || "");
-        setAvatarUrl(data.avatar_url || null);
+        setAvatarUrl(data.avatar_url || user.imageUrl);
+      } else {
+        await supabase.from("profiles").insert([
+          {
+            id: user.id,
+            display_name: user.fullName,
+            email: user.primaryEmailAddress?.emailAddress,
+            avatar_url: user.imageUrl,
+          },
+        ]);
+        setAvatarUrl(user.imageUrl);
       }
     } catch (error) {
       console.error("Error fetching profile:", error);
-      Alert.alert("ข้อผิดพลาด", "เกิดข้อผิดพลาดในการโหลดข้อมูล");
+      Alert.alert("ข้อผิดพลาด", "ไม่สามารถโหลดข้อมูลผู้ใช้ได้");
     } finally {
       setLoading(false);
     }
   };
 
+  // ✅ อัปโหลดรูปภาพไปยัง Supabase Storage (ไม่ใช้ Buffer หรือ Base64)
+  // ✅ อัปโหลดรูปภาพไปยัง Supabase Storage (เวอร์ชันใช้งานจริง)
   const pickImage = async () => {
     try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      const { status } =
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== "granted") {
-        Alert.alert("ขออภัย", "กรุณาอนุญาตการเข้าถึงรูปภาพ");
+        Alert.alert("กรุณาอนุญาตเข้าถึงคลังภาพ");
         return;
       }
 
@@ -86,85 +86,101 @@ export default function EditProfile() {
         quality: 0.8,
       });
 
-      if (!result.canceled) {
-        setUploading(true);
-        const file = result.assets[0];
-        const fileExtension = file.uri.split(".").pop();
-        const fileName = `${user.id}_${Date.now()}.${fileExtension}`;
-        const filePath = `avatars/${fileName}`;
+      if (result.canceled) return;
+      setUploading(true);
 
-        const response = await fetch(file.uri);
-        const blob = await response.blob();
+      const uri = result.assets[0].uri;
+      const filename = `${user.id}-${Date.now()}.jpg`;
 
-        const { data, error } = await supabase.storage
-          .from("avatars")
-          .upload(filePath, blob, {
-            contentType: `image/${fileExtension}`,
-            upsert: true,
-          });
+      const token = await getToken({ template: "supabase" });
+      const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
+      const SUPABASE_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
-        if (error) {
-          Alert.alert("อัพโหลดล้มเหลว", error.message);
-        } else {
-          const { data: publicURLData } = supabase.storage
-            .from("avatars")
-            .getPublicUrl(filePath);
-          setAvatarUrl(publicURLData.publicUrl);
+      const formData = new FormData();
+      formData.append("file", {
+        uri,
+        name: "avatar.jpg",
+        type: "image/jpeg",
+      });
+
+      // ✅ อัปโหลดไปยัง bucket "avatars"
+      const response = await fetch(
+        `${SUPABASE_URL}/storage/v1/object/avatars/${filename}`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            apikey: SUPABASE_KEY,
+          },
+          body: formData,
         }
+      );
+
+      if (!response.ok) {
+        const errText = await response.text();
+        console.error("Upload error:", errText);
+        throw new Error("Upload failed: " + errText);
       }
-    } catch (error) {
-      console.error("Error picking image:", error);
-      Alert.alert("ข้อผิดพลาด", "เกิดข้อผิดพลาดในการเลือกรูปภาพ");
+
+      // ✅ public URL
+      const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/avatars/${filename}`;
+
+      const supabase = createClerkSupabaseClient(token);
+      const { error: updateError } = await supabase
+        .from("profiles")
+        .update({ avatar_url: publicUrl })
+        .eq("id", user.id);
+
+      if (updateError) throw updateError;
+
+      setAvatarUrl(publicUrl);
+      Alert.alert("สำเร็จ", "อัปโหลดรูปโปรไฟล์เรียบร้อยแล้ว");
+    } catch (err) {
+      console.error("Upload failed:", err);
+      Alert.alert("เกิดข้อผิดพลาด", err.message || "อัปโหลดไม่สำเร็จ");
     } finally {
       setUploading(false);
     }
   };
 
+  // ✅ บันทึกข้อมูลโปรไฟล์
   const handleSave = async () => {
-    if (!fullname.trim()) {
-      Alert.alert("กรุณากรอกข้อมูล", "กรุณากรอกชื่อ-นามสกุล");
-      return;
-    }
-
+    if (!user) return;
     setLoading(true);
     try {
+      const token = await getToken({ template: "supabase" });
+      const supabase = createClerkSupabaseClient(token);
+
       const { error } = await supabase.from("profiles").upsert({
         id: user.id,
-        fullname: fullname.trim(),
-        phone: phone.trim(),
+        display_name: user.fullName,
+        email: user.primaryEmailAddress?.emailAddress,
         avatar_url: avatarUrl,
-        updated_at: new Date().toISOString(),
+        phone: phone.trim(),
+        last_sign_in_at: new Date().toISOString(),
       });
 
-      if (error) {
-        Alert.alert("บันทึกล้มเหลว", error.message);
-      } else {
-        Alert.alert("สำเร็จ", "บันทึกโปรไฟล์เรียบร้อยแล้ว", [
-          {
-            text: "ตกลง",
-            onPress: () => router.push("/(tabs)/profile"), // ✅ กลับหน้าโปรไฟล์
-          },
-        ]);
-      }
+      if (error) throw error;
+
+      Alert.alert("สำเร็จ", "บันทึกข้อมูลโปรไฟล์แล้ว", [
+        { text: "ตกลง", onPress: () => router.push("/(tabs)/profile") },
+      ]);
     } catch (error) {
       console.error("Error saving profile:", error);
-      Alert.alert("ข้อผิดพลาด", "เกิดข้อผิดพลาดในการบันทึก");
+      Alert.alert("บันทึกล้มเหลว", error.message);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchUserProfile();
-  }, []);
+    fetchProfile();
+  }, [user]);
 
   if (loading && !user) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#6366f1" />
-          <Text style={styles.loadingText}>กำลังโหลด...</Text>
-        </View>
+        <ActivityIndicator size="large" color="#6366f1" />
       </SafeAreaView>
     );
   }
@@ -174,43 +190,34 @@ export default function EditProfile() {
       <StatusBar barStyle="dark-content" backgroundColor="#fff" />
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={styles.keyboardAvoid}
+        style={{ flex: 1 }}
       >
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-        >
+        <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
           <View style={styles.header}>
-            <TouchableOpacity
-              style={styles.backButton}
-              onPress={() => router.push("/(tabs)/profile")}
-            >
-              <Ionicons name="arrow-back" size={24} color="#1e293b" />
+            <TouchableOpacity onPress={() => router.push("/(tabs)/profile")}>
+              <Ionicons name="arrow-back" size={26} color="#1e293b" />
             </TouchableOpacity>
-            <View style={styles.headerContent}>
-              <Text style={styles.headerTitle}>แก้ไขโปรไฟล์</Text>
-              <Text style={styles.headerSubtitle}>อัปเดตข้อมูลส่วนตัวของคุณ</Text>
-            </View>
+            <Text style={styles.headerTitle}>แก้ไขโปรไฟล์</Text>
           </View>
 
           <View style={styles.avatarSection}>
             <TouchableOpacity
-              style={styles.avatarContainer}
               onPress={pickImage}
               disabled={uploading}
+              style={styles.avatarContainer}
             >
-              {avatarUrl ? (
-                <Image source={{ uri: avatarUrl }} style={styles.avatar} />
-              ) : (
-                <View style={styles.avatarPlaceholder}>
-                  <Text style={styles.avatarPlaceholderText}>📷</Text>
-                  <Text style={styles.avatarPlaceholderSubtext}>เลือกรูป</Text>
-                </View>
-              )}
+              <Image
+                source={{
+                  uri:
+                    avatarUrl ||
+                    user.imageUrl ||
+                    "https://www.gravatar.com/avatar/?d=mp",
+                }}
+                style={styles.avatar}
+              />
               {uploading && (
-                <View style={styles.uploadingOverlay}>
-                  <ActivityIndicator size="small" color="#fff" />
+                <View style={styles.uploadOverlay}>
+                  <ActivityIndicator color="#fff" />
                 </View>
               )}
             </TouchableOpacity>
@@ -226,49 +233,37 @@ export default function EditProfile() {
           </View>
 
           <View style={styles.formSection}>
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>ชื่อ - นามสกุล *</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="กรอกชื่อ-นามสกุล"
-                value={fullname}
-                onChangeText={setFullname}
-                placeholderTextColor="#9ca3af"
-              />
-            </View>
+            <Text style={styles.label}>ชื่อ - นามสกุล</Text>
+            <TextInput
+              style={[styles.input, { backgroundColor: "#f9fafb" }]}
+              value={user?.fullName || ""}
+              editable={false}
+            />
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>อีเมล</Text>
-              <TextInput
-                style={[styles.input, styles.disabledInput]}
-                placeholder="อีเมล"
-                value={email}
-                editable={false}
-                placeholderTextColor="#9ca3af"
-              />
-              <Text style={styles.inputHelper}>อีเมลไม่สามารถแก้ไขได้</Text>
-            </View>
+            <Text style={styles.label}>อีเมล</Text>
+            <TextInput
+              style={[styles.input, { backgroundColor: "#f9fafb" }]}
+              value={user?.primaryEmailAddress?.emailAddress || ""}
+              editable={false}
+            />
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>เบอร์โทรศัพท์</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="กรอกเบอร์โทรศัพท์"
-                keyboardType="phone-pad"
-                value={phone}
-                onChangeText={setPhone}
-                placeholderTextColor="#9ca3af"
-              />
-            </View>
+            <Text style={styles.label}>เบอร์โทรศัพท์</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="กรอกเบอร์โทรศัพท์"
+              keyboardType="phone-pad"
+              value={phone}
+              onChangeText={setPhone}
+            />
           </View>
 
           <TouchableOpacity
-            style={[styles.saveButton, loading && styles.saveButtonDisabled]}
+            style={[styles.saveButton, loading && { opacity: 0.6 }]}
             onPress={handleSave}
             disabled={loading}
           >
             {loading ? (
-              <ActivityIndicator size="small" color="#fff" />
+              <ActivityIndicator color="#fff" />
             ) : (
               <Text style={styles.saveButtonText}>บันทึกข้อมูล</Text>
             )}
@@ -280,177 +275,62 @@ export default function EditProfile() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    paddingTop: 30,
-    flex: 1,
-    backgroundColor: "#f8fafc",
-  },
-  keyboardAvoid: {
-    flex: 1,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingBottom: 30,
-  },
+  container: { flex: 1, backgroundColor: "#f8fafc" },
   header: {
-    backgroundColor: "#fff",
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 30,
-    borderBottomWidth: 1,
-    borderBottomColor: "#e2e8f0",
     flexDirection: "row",
     alignItems: "center",
-  },
-  backButton: {
-    marginRight: 15,
-    padding: 5,
-  },
-  headerContent: {
-    flex: 1,
+    backgroundColor: "#fff",
+    padding: 20,
+    borderBottomWidth: 1,
+    borderColor: "#e5e7eb",
   },
   headerTitle: {
-    fontSize: 24,
-    fontWeight: "bold",
+    fontSize: 20,
+    fontWeight: "700",
+    marginLeft: 10,
     color: "#1e293b",
-    marginBottom: 5,
-  },
-  headerSubtitle: {
-    fontSize: 14,
-    color: "#64748b",
   },
   avatarSection: {
+    alignItems: "center",
     backgroundColor: "#fff",
-    paddingVertical: 30,
-    paddingHorizontal: 20,
-    alignItems: "center",
-    marginTop: 10,
+    paddingVertical: 20,
   },
-  avatarContainer: {
-    position: "relative",
-    marginBottom: 15,
-  },
-  avatar: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    borderWidth: 4,
-    borderColor: "#e2e8f0",
-  },
-  avatarPlaceholder: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: "#f1f5f9",
-    borderWidth: 2,
-    borderColor: "#e2e8f0",
-    borderStyle: "dashed",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  avatarPlaceholderText: {
-    fontSize: 30,
-    marginBottom: 5,
-  },
-  avatarPlaceholderSubtext: {
-    fontSize: 12,
-    color: "#64748b",
-    fontWeight: "500",
-  },
-  uploadingOverlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+  avatarContainer: { position: "relative" },
+  avatar: { width: 120, height: 120, borderRadius: 60 },
+  uploadOverlay: {
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(0,0,0,0.5)",
     borderRadius: 60,
     justifyContent: "center",
     alignItems: "center",
   },
   changePhotoButton: {
+    marginTop: 10,
     paddingHorizontal: 20,
     paddingVertical: 8,
-    backgroundColor: "#f8fafc",
     borderRadius: 20,
     borderWidth: 1,
     borderColor: "#e2e8f0",
   },
-  changePhotoText: {
-    color: "#6366f1",
-    fontSize: 14,
-    fontWeight: "500",
-  },
-  formSection: {
-    backgroundColor: "#fff",
-    marginTop: 10,
-    paddingHorizontal: 20,
-    paddingVertical: 25,
-  },
-  inputGroup: {
-    marginBottom: 20,
-  },
-  inputLabel: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#374151",
-    marginBottom: 8,
-  },
+  changePhotoText: { color: "#6366f1", fontWeight: "600" },
+  formSection: { backgroundColor: "#fff", marginTop: 10, padding: 20 },
+  label: { fontWeight: "600", color: "#374151", marginBottom: 6 },
   input: {
     borderWidth: 1,
     borderColor: "#d1d5db",
-    backgroundColor: "#fff",
-    padding: 15,
-    borderRadius: 12,
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 16,
     fontSize: 16,
     color: "#1f2937",
-  },
-  disabledInput: {
-    backgroundColor: "#f9fafb",
-    color: "#6b7280",
-  },
-  inputHelper: {
-    fontSize: 12,
-    color: "#6b7280",
-    marginTop: 5,
   },
   saveButton: {
     backgroundColor: "#6366f1",
     marginHorizontal: 20,
     marginTop: 20,
-    padding: 16,
     borderRadius: 12,
+    padding: 15,
     alignItems: "center",
-    shadowColor: "#6366f1",
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
   },
-  saveButtonDisabled: {
-    backgroundColor: "#9ca3af",
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-  saveButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#f8fafc",
-  },
-  loadingText: {
-    marginTop: 10,
-    color: "#64748b",
-    fontSize: 16,
-  },
+  saveButtonText: { color: "#fff", fontWeight: "600", fontSize: 16 },
 });
