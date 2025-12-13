@@ -43,6 +43,7 @@ export default function SignInScreen() {
   const onSignInPress = async () => {
     if (!isLoaded) return;
     setLoading(true);
+
     try {
       const result = await signIn.create({
         identifier: emailAddress,
@@ -51,7 +52,14 @@ export default function SignInScreen() {
 
       if (result.status === "complete") {
         await setActive({ session: result.createdSessionId });
-        router.replace("/");
+
+        // 🔥 CHECK ADMIN
+        const adminEmails = ["admin@gmail.com"];
+        if (adminEmails.includes(emailAddress)) {
+          router.replace("/admin");
+        } else {
+          router.replace("/home");
+        }
       } else {
         console.log("Incomplete login:", result);
       }

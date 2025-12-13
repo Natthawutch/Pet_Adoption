@@ -36,6 +36,11 @@ export default function RootLayout() {
         <Stack.Screen name="register/index" options={{ headerShown: false }} />
         <Stack.Screen name="edit-profile/EditProfile" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="admin" options={{ headerShown: false }} />
+        {/* <Stack.Screen name="admin/_layout" options={{ headerShown: false }} />
+        <Stack.Screen name="admin/dashboard" options={{ headerShown: false }} />
+        <Stack.Screen name="admin/user" options={{ headerShown: false }} />
+        <Stack.Screen name="admin/notifications" options={{ headerShown: false }} /> */}
       </Stack>
     </ClerkWrapper>
   );
