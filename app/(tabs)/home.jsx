@@ -1,5 +1,6 @@
 import { useUser } from "@clerk/clerk-expo";
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router"; // เพิ่มบรรทัดนี้
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -19,6 +20,7 @@ import { supabase } from "../../config/supabaseClient";
 
 export default function Home() {
   const { user } = useUser();
+  const router = useRouter(); // เพิ่มบรรทัดนี้
   const [pets, setPets] = useState([]);
   const [filteredPets, setFilteredPets] = useState([]);
   const [loadingPets, setLoadingPets] = useState(true);
@@ -112,6 +114,35 @@ export default function Home() {
     (v) => v !== "ทั้งหมด"
   ).length;
 
+  // Navigate to pet detail
+  const handlePetPress = (pet) => {
+    router.push({
+      pathname: "/pet-details",
+      params: {
+        id: pet.id,
+        name: pet.name,
+        category: pet.category,
+        breed: pet.breed,
+        age: pet.age,
+        weight: pet.weight,
+        sex: pet.sex,
+        address: pet.address,
+        about: pet.about,
+        personality: pet.personality,
+        vaccine_history: pet.vaccine_history,
+        is_neutered: pet.is_neutered,
+        post_status: pet.post_status,
+        image_url: pet.image_url,
+        images: pet.images,
+        video_url: pet.video_url,
+        username: pet.username,
+        email: pet.email,
+        userImage: pet.userImage,
+        user_id: pet.user_id,
+      },
+    });
+  };
+
   // ฟังก์ชันแปลงเพศ
   const getGenderInfo = (sex) => {
     const normalizedSex = sex?.toLowerCase();
@@ -129,7 +160,6 @@ export default function Home() {
     const labels = {
       Dog: "สุนัข",
       Cat: "แมว",
-      Bird: "นก",
       Other: "อื่นๆ",
     };
     return labels[category] || category;
@@ -139,7 +169,6 @@ export default function Home() {
     const icons = {
       Dog: "🐕",
       Cat: "🐈",
-      Bird: "🐦",
       Other: "🐾",
     };
     return icons[category] || "🐾";
@@ -150,7 +179,11 @@ export default function Home() {
     const gender = getGenderInfo(item.sex);
 
     return (
-      <TouchableOpacity style={styles.petCard} activeOpacity={0.95}>
+      <TouchableOpacity
+        style={styles.petCard}
+        activeOpacity={0.95}
+        onPress={() => handlePetPress(item)} // เพิ่มบรรทัดนี้
+      >
         <View style={styles.petImageContainer}>
           <Image
             source={{
@@ -189,7 +222,13 @@ export default function Home() {
           </View>
 
           {/* Love Button */}
-          <TouchableOpacity style={styles.loveButtonTop}>
+          <TouchableOpacity
+            style={styles.loveButtonTop}
+            onPress={(e) => {
+              e.stopPropagation(); // ป้องกันไม่ให้ไปหน้า detail
+              // TODO: เพิ่มฟังก์ชัน favorite ตรงนี้
+            }}
+          >
             <Ionicons name="heart-outline" size={24} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
@@ -252,7 +291,13 @@ export default function Home() {
               </View>
             </View>
 
-            <TouchableOpacity style={styles.contactButton}>
+            <TouchableOpacity
+              style={styles.contactButton}
+              onPress={(e) => {
+                e.stopPropagation(); // ป้องกันไม่ให้ไปหน้า detail
+                // TODO: เพิ่มฟังก์ชัน chat ตรงนี้
+              }}
+            >
               <Ionicons name="chatbubble-outline" size={18} color="#8B5CF6" />
             </TouchableOpacity>
           </View>

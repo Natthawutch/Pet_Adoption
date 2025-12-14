@@ -37,6 +37,8 @@ export default function RootLayout() {
         <Stack.Screen name="edit-profile/EditProfile" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="admin" options={{ headerShown: false }} />
+        <Stack.Screen name="Favorite/favorite" options={{ headerShown: false }} />
+        <Stack.Screen name="add-new-pet/index" options={{ headerShown: false }} />
         {/* <Stack.Screen name="admin/_layout" options={{ headerShown: false }} />
         <Stack.Screen name="admin/dashboard" options={{ headerShown: false }} />
         <Stack.Screen name="admin/user" options={{ headerShown: false }} />

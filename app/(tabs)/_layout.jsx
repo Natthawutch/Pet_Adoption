@@ -22,7 +22,7 @@ export default function TabLayout() {
           overflow: "hidden",
         },
         tabBarLabelStyle: {
-          fontSize: 12,
+          fontSize: 13,
           fontWeight: "600",
         },
         headerShown: false,
@@ -31,7 +31,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="home"
         options={{
-          title: "Home",
+          title: "หน้าแรก",
           tabBarIcon: ({ color }) => (
             <Ionicons name="home-sharp" size={25} color={color} />
           ),
@@ -41,7 +41,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="search"
         options={{
-          title: "Search",
+          title: "ค้นหา",
           tabBarIcon: ({ color }) => (
             <Ionicons name="search" size={25} color={color} />
           ),
@@ -51,7 +51,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="add-pet"
         options={{
-          title: "Add Pet",
+          title: "เพิ่มสัตว์เลี้ยง",
           tabBarIcon: ({ color }) => (
             <Ionicons name="add-circle" size={25} color={color} />
           ),
@@ -61,7 +61,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="notifications" // เปลี่ยนตรงนี้
         options={{
-          title: "Notifications", // เปลี่ยน title
+          title: "การแจ้งเตือน", // เปลี่ยน title
           tabBarIcon: ({ color }) => (
             <Ionicons name="notifications" size={25} color={color} /> // เปลี่ยนไอคอนเป็น notifications
           ),
@@ -71,7 +71,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="profile"
         options={{
-          title: "Profile",
+          title: "โปรไฟล์",
           tabBarIcon: ({ color }) => (
             <Ionicons name="people-circle-sharp" size={25} color={color} />
           ),

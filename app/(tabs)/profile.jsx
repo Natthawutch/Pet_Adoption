@@ -80,10 +80,21 @@ export default function Profile() {
 
   const fetchPosts = async (supabase, userId) => {
     const { data, error } = await supabase
-      .from("posts")
-      .select("id, media_url, caption, created_at, likes")
+      .from("pets")
+      .select(
+        `
+      id,
+      image_url,
+      images,
+      video_url,
+      name,
+      post_status,
+      created_at
+    `
+      )
       .eq("user_id", userId)
       .order("created_at", { ascending: false });
+
     if (!error) setPosts(data || []);
   };
 
@@ -257,14 +268,19 @@ export default function Profile() {
             data={posts}
             numColumns={3}
             scrollEnabled={false}
-            keyExtractor={(item) => item.id.toString()}
+            keyExtractor={(item) => item.id}
             renderItem={({ item }) => (
               <TouchableOpacity
-                onPress={() => router.push(`/post/${item.id}`)}
+                onPress={() =>
+                  router.push({
+                    pathname: "/pet-details",
+                    params: { id: item.id },
+                  })
+                }
                 style={styles.postItem}
               >
                 <Image
-                  source={{ uri: item.media_url }}
+                  source={{ uri: item.image_url }}
                   style={styles.postImage}
                 />
               </TouchableOpacity>
@@ -275,7 +291,7 @@ export default function Profile() {
             <Ionicons name="images-outline" size={50} color="#aaa" />
             <Text style={styles.emptyText}>ยังไม่มีโพสต์</Text>
             <TouchableOpacity
-              onPress={() => router.push("/create-post")}
+              onPress={() => router.push("/add-new-pet")}
               style={styles.newPostButton}
             >
               <Text style={styles.newPostText}>สร้างโพสต์แรก</Text>

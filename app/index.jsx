@@ -1,3 +1,4 @@
+import { useAuth } from "@clerk/clerk-expo";
 import { useRouter } from "expo-router";
 import { useEffect, useRef } from "react";
 import { Animated, Dimensions, Image, StyleSheet, View } from "react-native";
@@ -6,6 +7,8 @@ const { width, height } = Dimensions.get("window");
 
 export default function Index() {
   const router = useRouter();
+  const { isLoaded, isSignedIn } = useAuth();
+
   const progress = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const floatingAnim1 = useRef(new Animated.Value(0)).current;
@@ -14,26 +17,26 @@ export default function Index() {
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    // Fade in animation
+    // Fade in
     Animated.timing(fadeAnim, {
       toValue: 1,
       duration: 1000,
       useNativeDriver: true,
     }).start();
 
-    // Floating animations for background elements
+    // Floating animations
     const createFloatingAnimation = (animValue, duration, delay = 0) => {
       setTimeout(() => {
         Animated.loop(
           Animated.sequence([
             Animated.timing(animValue, {
               toValue: 1,
-              duration: duration,
+              duration,
               useNativeDriver: true,
             }),
             Animated.timing(animValue, {
               toValue: 0,
-              duration: duration,
+              duration,
               useNativeDriver: true,
             }),
           ])
@@ -41,11 +44,11 @@ export default function Index() {
       }, delay);
     };
 
-    createFloatingAnimation(floatingAnim1, 3000, 0);
+    createFloatingAnimation(floatingAnim1, 3000);
     createFloatingAnimation(floatingAnim2, 4000, 500);
     createFloatingAnimation(floatingAnim3, 3500, 1000);
 
-    // Pulse animation for logo
+    // Pulse logo
     Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnim, {
@@ -61,17 +64,28 @@ export default function Index() {
       ])
     ).start();
 
-    // Progress animation
-    setTimeout(() => {
-      Animated.timing(progress, {
-        toValue: 1,
-        duration: 1000,
-        useNativeDriver: false,
-      }).start(() => {
-        router.replace("/(tabs)/home");
-      });
-    }, 800);
+    // Progress bar
+    Animated.timing(progress, {
+      toValue: 1,
+      duration: 1800,
+      useNativeDriver: false,
+    }).start();
   }, []);
+
+  // 🔑 AUTH REDIRECT (หัวใจของการแก้)
+  useEffect(() => {
+    if (!isLoaded) return;
+
+    const timer = setTimeout(() => {
+      if (isSignedIn) {
+        router.replace("/(tabs)/home");
+      } else {
+        router.replace("/login");
+      }
+    }, 1800); // รอ animation จบ
+
+    return () => clearTimeout(timer);
+  }, [isLoaded, isSignedIn]);
 
   const animatedWidth = progress.interpolate({
     inputRange: [0, 1],
@@ -91,7 +105,7 @@ export default function Index() {
 
   return (
     <View style={styles.container}>
-      {/* Animated background bubbles */}
+      {/* Background bubbles */}
       <Animated.View
         style={[
           styles.floatingBubble,
@@ -114,17 +128,13 @@ export default function Index() {
         ]}
       />
 
-      {/* Main content */}
+      {/* Main */}
       <Animated.View
         style={[
           styles.contentContainer,
-          {
-            opacity: fadeAnim,
-            transform: [{ scale: pulseAnim }],
-          },
+          { opacity: fadeAnim, transform: [{ scale: pulseAnim }] },
         ]}
       >
-        {/* Glassmorphism card */}
         <View style={styles.glassCard}>
           <Image
             source={require("../assets/images/Intro.png")}
@@ -133,7 +143,6 @@ export default function Index() {
           />
         </View>
 
-        {/* Modern progress section */}
         <View style={styles.progressSection}>
           <View style={styles.progressContainer}>
             <View style={styles.progressTrack}>
@@ -144,34 +153,6 @@ export default function Index() {
                 style={[styles.progressShine, { width: animatedWidth }]}
               />
             </View>
-          </View>
-
-          {/* Animated dots indicator */}
-          <View style={styles.indicatorContainer}>
-            {[...Array(5)].map((_, index) => (
-              <Animated.View
-                key={index}
-                style={[
-                  styles.indicator,
-                  {
-                    opacity: progress.interpolate({
-                      inputRange: [index * 0.2, (index + 1) * 0.2],
-                      outputRange: [0.3, 1],
-                      extrapolate: "clamp",
-                    }),
-                    transform: [
-                      {
-                        scale: progress.interpolate({
-                          inputRange: [index * 0.2, (index + 1) * 0.2],
-                          outputRange: [0.5, 1],
-                          extrapolate: "clamp",
-                        }),
-                      },
-                    ],
-                  },
-                ]}
-              />
-            ))}
           </View>
         </View>
       </Animated.View>

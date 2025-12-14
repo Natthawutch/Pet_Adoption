@@ -1,147 +1,123 @@
-import { Ionicons } from "@expo/vector-icons";
-import { useState } from "react";
-import { Animated, Pressable, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import Colors from "../../constants/Colors";
 
 export default function AboutPet({ pet }) {
-  const [readMode, setReadMode] = useState(true);
-  const [fadeAnim] = useState(new Animated.Value(0.7));
-
-  const handleToggle = () => {
-    setReadMode(!readMode);
-
-    // Subtle animation for read more/less
-    Animated.timing(fadeAnim, {
-      toValue: readMode ? 1 : 0.7,
-      duration: 200,
-      useNativeDriver: true,
-    }).start();
-  };
-
   return (
     <View style={styles.container}>
-      {/* Header with icon */}
-      <View style={styles.header}>
-        <Ionicons
-          name="information-circle-outline"
-          size={24}
-          color={Colors.PRIMARY}
-          style={styles.icon}
-        />
-        <Text style={styles.title}>About {pet?.name || "Pet"}</Text>
-      </View>
+      <Text style={styles.title}>เกี่ยวกับ {pet.name}</Text>
 
-      {/* Content area with subtle background */}
-      <View style={styles.contentContainer}>
-        <Animated.View style={{ opacity: fadeAnim }}>
-          <Text
-            numberOfLines={readMode ? 3 : undefined}
-            style={styles.description}
+      {pet.about && <Text style={styles.text}>{pet.about}</Text>}
+
+      {/* ลักษณะนิสัย */}
+      {pet.personality && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>🎭 ลักษณะนิสัย</Text>
+          <Text style={styles.sectionText}>{pet.personality}</Text>
+        </View>
+      )}
+
+      {/* ประวัติวัคซีน */}
+      {pet.vaccine_history && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>💉 ประวัติวัคซีน</Text>
+          <Text style={styles.sectionText}>{pet.vaccine_history}</Text>
+        </View>
+      )}
+
+      {/* สถานะทำหมัน */}
+      {pet.is_neutered && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>✂️ สถานะทำหมัน</Text>
+          <Text style={styles.sectionText}>
+            {pet.is_neutered === "Yes" ? "ทำหมันแล้ว" : "ยังไม่ได้ทำหมัน"}
+          </Text>
+        </View>
+      )}
+
+      {/* สถานะการโพสต์ */}
+      {pet.post_status && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>📋 สถานะ</Text>
+          <View
+            style={[
+              styles.statusBadge,
+              pet.post_status === "Available" && styles.statusAvailable,
+              pet.post_status === "Pending" && styles.statusPending,
+              pet.post_status === "Adopted" && styles.statusAdopted,
+            ]}
           >
-            {pet?.about || "No description available for this pet."}
-          </Text>
-        </Animated.View>
-
-        {/* Read more/less button with improved styling */}
-        <Pressable
-          style={({ pressed }) => [
-            styles.toggleButton,
-            pressed && styles.toggleButtonPressed,
-          ]}
-          onPress={handleToggle}
-        >
-          <Text style={styles.toggleText}>
-            {readMode ? "Read More" : "Read Less"}
-          </Text>
-          <Ionicons
-            name={readMode ? "chevron-down" : "chevron-up"}
-            size={16}
-            color={Colors.SECONDARY}
-            style={styles.chevron}
-          />
-        </Pressable>
-      </View>
-
-      {/* Decorative bottom border */}
-      <View style={styles.bottomBorder} />
+            <Text
+              style={[
+                styles.statusText,
+                pet.post_status === "Available" && { color: "#10B981" },
+                pet.post_status === "Pending" && { color: "#F59E0B" },
+                pet.post_status === "Adopted" && { color: "#EF4444" },
+              ]}
+            >
+              {pet.post_status === "Available" && "🟢 พร้อมหาบ้าน"}
+              {pet.post_status === "Pending" && "🟡 รอพิจารณา"}
+              {pet.post_status === "Adopted" && "🔴 หาบ้านแล้ว"}
+            </Text>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
 
-const styles = {
+const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: 10,
-    paddingVertical: 16,
-    backgroundColor: "#fff",
+    padding: 20,
   },
-
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-
-  icon: {
-    marginRight: 8,
-    color: Colors.BLACK || "#333",
-  },
-
   title: {
-    fontFamily: "outfit-bold",
-    fontSize: 22,
-    color: Colors.BLACK || "#333",
-    flex: 1,
-  },
-
-  contentContainer: {
-    backgroundColor: "#f8f9fa",
-    borderRadius: 12,
-    padding: 16,
-    borderLeftWidth: 4,
-    borderLeftColor: Colors.LIGHT_PURPLE || "#007AFF",
-  },
-
-  description: {
-    fontFamily: "outfit",
-    fontSize: 15,
-    lineHeight: 22,
-    color: Colors.GRAY || "#666",
+    fontFamily: "outfit-medium",
+    fontSize: 20,
+    color: Colors.BLACK,
     marginBottom: 12,
   },
-
-  toggleButton: {
-    flexDirection: "row",
-    alignItems: "center",
+  text: {
+    fontFamily: "outfit",
+    fontSize: 14,
+    color: Colors.DARK_GRAY,
+    lineHeight: 22,
+  },
+  section: {
+    marginTop: 16,
+  },
+  sectionTitle: {
+    fontFamily: "outfit-medium",
+    fontSize: 16,
+    color: Colors.BLACK,
+    marginBottom: 8,
+  },
+  sectionText: {
+    fontFamily: "outfit",
+    fontSize: 14,
+    color: Colors.DARK_GRAY,
+    lineHeight: 22,
+  },
+  statusBadge: {
     alignSelf: "flex-start",
+    paddingHorizontal: 16,
     paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 20,
-    backgroundColor: Colors.SECONDARY ? `${Colors.SECONDARY}10` : "#007AFF10",
-    borderWidth: 1,
-    borderColor: Colors.SECONDARY || "#007AFF",
+    borderRadius: 12,
+    borderWidth: 2,
   },
-
-  toggleButtonPressed: {
-    backgroundColor: Colors.SECONDARY ? `${Colors.SECONDARY}20` : "#007AFF20",
-    transform: [{ scale: 0.98 }],
+  statusAvailable: {
+    backgroundColor: "#ECFDF5",
+    borderColor: "#10B981",
   },
-
-  toggleText: {
+  statusPending: {
+    backgroundColor: "#FFFBEB",
+    borderColor: "#F59E0B",
+  },
+  statusAdopted: {
+    backgroundColor: "#FEF2F2",
+    borderColor: "#EF4444",
+  },
+  statusText: {
     fontFamily: "outfit-medium",
     fontSize: 14,
-    color: Colors.SECONDARY || "#007AFF",
-    marginRight: 4,
+    fontWeight: "600",
   },
-
-  chevron: {
-    marginLeft: 2,
-  },
-
-  bottomBorder: {
-    height: 2,
-    backgroundColor: Colors.PRIMARY ? `${Colors.PRIMARY}20` : "#007AFF20",
-    borderRadius: 1,
-    marginTop: 16,
-    width: "100%",
-  },
-};
+});
