@@ -59,8 +59,21 @@ export default function Dashboard() {
 
   return (
     <View style={styles.container}>
+      {/* ===== HEADER ===== */}
+      <View style={styles.header}>
+        <View>
+          <Text style={styles.greeting}>ยินดีต้อนรับ</Text>
+          <Text style={styles.title}>Dashboard</Text>
+        </View>
+
+        <Pressable style={styles.notificationBtn}>
+          <Ionicons name="notifications" size={22} color="#334155" />
+          <View style={styles.notificationDot} />
+        </Pressable>
+      </View>
+
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Stats Cards */}
+        {/* ===== STATS ===== */}
         <View style={styles.statsSection}>
           <Text style={styles.sectionTitle}>สถิติระบบ</Text>
 
@@ -81,10 +94,12 @@ export default function Dashboard() {
                 >
                   <Ionicons name={stat.icon} size={24} color={stat.color} />
                 </View>
+
                 <View style={styles.statInfo}>
                   <Text style={styles.statTitle}>{stat.title}</Text>
                   <View style={styles.statNumberRow}>
                     <Text style={styles.statNumber}>{stat.number}</Text>
+
                     <View
                       style={[
                         styles.changeBadge,
@@ -112,12 +127,43 @@ export default function Dashboard() {
                   </View>
                 </View>
               </View>
+
               <Ionicons name="chevron-forward" size={20} color="#cbd5e1" />
             </Pressable>
           ))}
         </View>
 
-        {/* Recent Activity */}
+        {/* ===== QUICK ACTIONS ===== */}
+        <View style={styles.actionsSection}>
+          <Text style={styles.sectionTitle}>การจัดการ</Text>
+
+          <View style={styles.actionsGrid}>
+            {quickActions.map((action, idx) => (
+              <Pressable
+                key={idx}
+                style={({ pressed }) => [
+                  styles.actionCard,
+                  pressed && styles.actionCardPressed,
+                ]}
+                onPress={() => {
+                  // TODO: ใส่ router.push(...) ภายหลัง
+                }}
+              >
+                <View
+                  style={[
+                    styles.actionIcon,
+                    { backgroundColor: action.color + "20" },
+                  ]}
+                >
+                  <Ionicons name={action.icon} size={28} color={action.color} />
+                </View>
+                <Text style={styles.actionLabel}>{action.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+
+        {/* ===== ACTIVITY ===== */}
         <View style={styles.activitySection}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>กิจกรรมล่าสุด</Text>
@@ -126,42 +172,7 @@ export default function Dashboard() {
             </Pressable>
           </View>
 
-          <View style={styles.activityCard}>
-            <View style={styles.activityIcon}>
-              <Ionicons name="checkmark-circle" size={20} color="#10b981" />
-            </View>
-            <View style={styles.activityContent}>
-              <Text style={styles.activityTitle}>การรับเลี้ยงใหม่</Text>
-              <Text style={styles.activityText}>
-                สุนัขพันธุ์โกลเด้นถูกรับเลี้ยงแล้ว
-              </Text>
-              <Text style={styles.activityTime}>5 นาทีที่แล้ว</Text>
-            </View>
-          </View>
-
-          <View style={styles.activityCard}>
-            <View style={styles.activityIcon}>
-              <Ionicons name="person-add" size={20} color="#6366f1" />
-            </View>
-            <View style={styles.activityContent}>
-              <Text style={styles.activityTitle}>ผู้ใช้ใหม่</Text>
-              <Text style={styles.activityText}>มีสมาชิกใหม่เข้าร่วมระบบ</Text>
-              <Text style={styles.activityTime}>15 นาทีที่แล้ว</Text>
-            </View>
-          </View>
-
-          <View style={styles.activityCard}>
-            <View style={styles.activityIcon}>
-              <Ionicons name="alert-circle" size={20} color="#f59e0b" />
-            </View>
-            <View style={styles.activityContent}>
-              <Text style={styles.activityTitle}>รอการอนุมัติ</Text>
-              <Text style={styles.activityText}>
-                มีคำขอรับเลี้ยงใหม่ 3 รายการ
-              </Text>
-              <Text style={styles.activityTime}>1 ชั่วโมงที่แล้ว</Text>
-            </View>
-          </View>
+          {/* activity cards เหมือนเดิม */}
         </View>
 
         <View style={{ height: 40 }} />

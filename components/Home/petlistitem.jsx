@@ -1,9 +1,4 @@
-import {
-  Feather,
-  FontAwesome,
-  Ionicons,
-  MaterialCommunityIcons,
-} from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
@@ -20,14 +15,10 @@ import Colors from "../../constants/Colors";
 
 const { width } = Dimensions.get("window");
 
-export default function CamlistFeedItem({ pet }) {
+export default function PetListItem({ pet }) {
   const router = useRouter();
   const [image_url, setImageUrl] = useState(null);
   const [imageLoading, setImageLoading] = useState(true);
-  const [liked, setLiked] = useState(false);
-  const [likesCount, setLikesCount] = useState(pet?.likes || 0);
-  const [commentsCount, setCommentsCount] = useState(pet?.comments || 0);
-  const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     if (pet?.image_url) {
@@ -41,19 +32,6 @@ export default function CamlistFeedItem({ pet }) {
       }
     }
   }, [pet?.image_url]);
-
-  const toggleLike = () => {
-    if (liked) {
-      setLikesCount(likesCount - 1);
-    } else {
-      setLikesCount(likesCount + 1);
-    }
-    setLiked(!liked);
-  };
-
-  const toggleSave = () => {
-    setSaved(!saved);
-  };
 
   return (
     <View style={styles.feedItem}>
@@ -107,58 +85,7 @@ export default function CamlistFeedItem({ pet }) {
           style={styles.mainImage}
           onLoadEnd={() => setImageLoading(false)}
         />
-
-        {/* Price tag overlay
-        <View style={styles.priceTag}>
-          <Text style={styles.priceText}>
-            {pet?.price ? `$${pet.price.toFixed(2)}` : ""}
-          </Text>
-        </View> */}
       </TouchableOpacity>
-
-      {/* Action buttons */}
-      <View style={styles.actionRow}>
-        <View style={styles.leftActions}>
-          <TouchableOpacity onPress={toggleLike} style={styles.actionBtn}>
-            <MaterialCommunityIcons
-              name={liked ? "paw" : "paw-outline"}
-              size={24}
-              color={liked ? "#ff6b35" : Colors.DARK_GRAY}
-            />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={() => router.push({ pathname: "/comments", params: pet })}
-            style={styles.actionBtn}
-          >
-            <FontAwesome name="comment-o" size={22} color={Colors.DARK_GRAY} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={() => alert("Share feature coming soon!")}
-            style={styles.actionBtn}
-          >
-            <Feather name="send" size={22} color={Colors.DARK_GRAY} />
-          </TouchableOpacity>
-        </View>
-
-        <TouchableOpacity onPress={toggleSave} style={styles.saveBtn}>
-          <Ionicons
-            name={saved ? "bookmark" : "bookmark-outline"}
-            size={24}
-            color={saved ? Colors.PURPLE : Colors.DARK_GRAY}
-          />
-        </TouchableOpacity>
-      </View>
-
-      {/* Engagement info */}
-      <View style={styles.engagementInfo}>
-        {likesCount > 0 && (
-          <Text style={styles.likesText}>
-            {likesCount} {likesCount === 1 ? "like" : "likes"}
-          </Text>
-        )}
-      </View>
 
       {/* Pet info and description */}
       <View style={styles.petInfo}>
@@ -194,16 +121,6 @@ export default function CamlistFeedItem({ pet }) {
             </Text>
           )}
         </View>
-
-        {commentsCount > 0 && (
-          <TouchableOpacity
-            onPress={() => router.push({ pathname: "/comments", params: pet })}
-          >
-            <Text style={styles.viewComments}>
-              View all {commentsCount} comments
-            </Text>
-          </TouchableOpacity>
-        )}
       </View>
     </View>
   );
@@ -259,7 +176,7 @@ const styles = StyleSheet.create({
   mainImage: {
     width: "100%",
     height: "100%",
-    resizeMode: "cover",
+    resizeMode: "contain",
     borderRadius: 12,
   },
   imageLoader: {
@@ -270,49 +187,9 @@ const styles = StyleSheet.create({
     marginTop: -15,
     zIndex: 2,
   },
-  // priceTag: {
-  //   position: "absolute",
-  //   bottom: 16,
-  //   right: 16,
-  //   backgroundColor: "rgba(0,0,0,0.8)",
-  //   paddingHorizontal: 12,
-  //   paddingVertical: 6,
-  //   borderRadius: 20,
-  // },
-  // priceText: {
-  //   color: "#fff",
-  //   fontFamily: "outfit-bold",
-  //   fontSize: 16,
-  // },
-  actionRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  leftActions: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  actionBtn: {
-    marginRight: 16,
-    padding: 4,
-  },
-  saveBtn: {
-    padding: 4,
-  },
-  engagementInfo: {
-    paddingHorizontal: 16,
-    paddingBottom: 8,
-  },
-  likesText: {
-    fontFamily: "outfit-medium",
-    fontSize: 14,
-    color: Colors.BLACK,
-  },
   petInfo: {
     paddingHorizontal: 16,
+    paddingTop: 12,
     paddingBottom: 16,
   },
   petName: {
@@ -343,12 +220,6 @@ const styles = StyleSheet.create({
   locationText: {
     fontFamily: "outfit",
     fontSize: 12,
-    color: Colors.DARK_GRAY,
-    marginTop: 4,
-  },
-  viewComments: {
-    fontFamily: "outfit",
-    fontSize: 14,
     color: Colors.DARK_GRAY,
     marginTop: 4,
   },

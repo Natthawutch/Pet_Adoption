@@ -298,7 +298,7 @@ export default function AddNewPetForm() {
                   source={{ uri: video.uri }}
                   style={styles.videoPreview}
                   useNativeControls
-                  resizeMode="cover"
+                  resizeMode="contain"
                 />
                 <TouchableOpacity
                   style={styles.removeBtn}

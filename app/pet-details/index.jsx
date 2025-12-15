@@ -1,5 +1,4 @@
 import { useAuth, useUser } from "@clerk/clerk-expo";
-import Ionicons from "@expo/vector-icons/Ionicons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
@@ -18,7 +17,10 @@ import AboutPet from "../../components/PetDetails/AboutPet";
 import OwnerInfo from "../../components/PetDetails/OwnerInfo";
 import PetInfo from "../../components/PetDetails/PetInfo";
 import PetSubInfo from "../../components/PetDetails/PetSubInfo";
-import { createClerkSupabaseClient, supabase } from "../../config/supabaseClient";
+import {
+  createClerkSupabaseClient,
+  supabase,
+} from "../../config/supabaseClient";
 import Colors from "../../constants/Colors";
 
 export default function PetDetails() {
@@ -37,9 +39,7 @@ export default function PetDetails() {
 
   useEffect(() => {
     navigation.setOptions({
-      headerTransparent: true,
-      headerTitle: "",
-      headerTintColor: Colors.WHITE,
+      headerShown: false, // ✅ ปิด header ของ Expo
     });
 
     fetchPet();
@@ -49,7 +49,9 @@ export default function PetDetails() {
     if (user && pet) checkFavorite();
   }, [user, pet]);
 
-  // 🔹 ดึงข้อมูลสัตว์
+  /* =======================
+     Fetch pet
+  ======================= */
   const fetchPet = async () => {
     const { data, error } = await supabase
       .from("pets")
@@ -66,7 +68,9 @@ export default function PetDetails() {
     setLoading(false);
   };
 
-  // ❤️ เช็ค Favorite
+  /* =======================
+     Favorite logic
+  ======================= */
   const checkFavorite = async () => {
     const token = await getToken({ template: "supabase" });
     const supabaseAuth = createClerkSupabaseClient(token);
@@ -81,7 +85,6 @@ export default function PetDetails() {
     setIsFavorite(!!data);
   };
 
-  // ❤️ Toggle Favorite
   const toggleFavorite = async () => {
     if (!user) {
       Alert.alert("กรุณาเข้าสู่ระบบ");
@@ -97,7 +100,6 @@ export default function PetDetails() {
         .delete()
         .eq("user_id", user.id)
         .eq("pet_id", pet.id);
-
       setIsFavorite(false);
     } else {
       await supabaseAuth.from("favorites").insert([
@@ -106,12 +108,13 @@ export default function PetDetails() {
           pet_id: pet.id,
         },
       ]);
-
       setIsFavorite(true);
     }
   };
 
-  // 💬 เริ่มแชท
+  /* =======================
+     Chat
+  ======================= */
   const InitiateChat = async () => {
     if (!user) {
       Alert.alert("กรุณาเข้าสู่ระบบ");
@@ -121,14 +124,12 @@ export default function PetDetails() {
     animateButton();
     setIsLoading(true);
 
-    const chatId = `${user.id}_${pet.user_id}`;
-
     try {
       router.push({
         pathname: "/chat",
-        params: { id: chatId },
+        params: { id: `${user.id}_${pet.user_id}` },
       });
-    } catch (err) {
+    } catch {
       Alert.alert("ไม่สามารถเริ่มแชทได้");
     } finally {
       setIsLoading(false);
@@ -161,23 +162,18 @@ export default function PetDetails() {
   return (
     <View style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false}>
-        <PetInfo pet={pet} />
+        <PetInfo
+          pet={pet}
+          isFavorite={isFavorite}
+          onToggleFavorite={toggleFavorite}
+        />
         <PetSubInfo pet={pet} />
         <AboutPet pet={pet} />
         <OwnerInfo pet={pet} />
         <View style={{ height: 120 }} />
       </ScrollView>
 
-      {/* ❤️ Favorite Button */}
-      <TouchableOpacity style={styles.favoriteBtn} onPress={toggleFavorite}>
-        <Ionicons
-          name={isFavorite ? "heart" : "heart-outline"}
-          size={26}
-          color={isFavorite ? "#EF4444" : "#6B7280"}
-        />
-      </TouchableOpacity>
-
-      {/* 🟣 Bottom Button */}
+      {/* Bottom CTA */}
       <View style={styles.bottomContainer}>
         <Animated.View style={{ transform: [{ scale: buttonScale }] }}>
           <TouchableOpacity
@@ -219,14 +215,5 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 18,
     fontWeight: "600",
-  },
-  favoriteBtn: {
-    position: "absolute",
-    top: 60,
-    right: 20,
-    backgroundColor: "#fff",
-    padding: 10,
-    borderRadius: 999,
-    elevation: 6,
   },
 });

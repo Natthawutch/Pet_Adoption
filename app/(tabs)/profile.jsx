@@ -38,44 +38,6 @@ export default function Profile() {
       router.replace("/login");
       return;
     }
-
-    const fetchUserData = async () => {
-      try {
-        setLoading(true);
-        const token = await getToken({ template: "supabase" });
-        if (!token) throw new Error("No Clerk token found");
-        const supabase = createClerkSupabaseClient(token);
-
-        const { data: profile, error } = await supabase
-          .from("users")
-          .select(
-            `
-            *,
-            followers:follows!follows_following_id_fkey(count),
-            following:follows!follows_follower_id_fkey(count)
-          `
-          )
-          .eq("id", user.id)
-          .maybeSingle();
-
-        if (error) throw error;
-
-        setProfileUser({
-          ...profile,
-          followers: profile?.followers?.[0]?.count || 0,
-          following: profile?.following?.[0]?.count || 0,
-        });
-
-        await fetchPosts(supabase, user.id);
-      } catch (err) {
-        console.error("Failed to load profile:", err);
-        Alert.alert("Error", "ไม่สามารถโหลดข้อมูลผู้ใช้ได้");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchUserData();
   }, [user]);
 
   const fetchPosts = async (supabase, userId) => {
@@ -232,14 +194,6 @@ export default function Profile() {
           <View style={styles.statBox}>
             <Text style={styles.statValue}>{posts.length}</Text>
             <Text style={styles.statLabel}>โพสต์</Text>
-          </View>
-          <View style={styles.statBox}>
-            <Text style={styles.statValue}>{profileUser.followers}</Text>
-            <Text style={styles.statLabel}>ผู้ติดตาม</Text>
-          </View>
-          <View style={styles.statBox}>
-            <Text style={styles.statValue}>{profileUser.following}</Text>
-            <Text style={styles.statLabel}>กำลังติดตาม</Text>
           </View>
         </View>
 

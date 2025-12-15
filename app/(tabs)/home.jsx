@@ -220,17 +220,6 @@ export default function Home() {
               </View>
             )}
           </View>
-
-          {/* Love Button */}
-          <TouchableOpacity
-            style={styles.loveButtonTop}
-            onPress={(e) => {
-              e.stopPropagation(); // ป้องกันไม่ให้ไปหน้า detail
-              // TODO: เพิ่มฟังก์ชัน favorite ตรงนี้
-            }}
-          >
-            <Ionicons name="heart-outline" size={24} color="#FFFFFF" />
-          </TouchableOpacity>
         </View>
 
         <View style={styles.petInfo}>
@@ -530,20 +519,6 @@ export default function Home() {
                     selected={filters.category === "Cat"}
                     onPress={() => setFilters({ ...filters, category: "Cat" })}
                   />
-                  <FilterOption
-                    label="🐦 นก"
-                    value="Bird"
-                    selected={filters.category === "Bird"}
-                    onPress={() => setFilters({ ...filters, category: "Bird" })}
-                  />
-                  <FilterOption
-                    label="🐾 อื่นๆ"
-                    value="Other"
-                    selected={filters.category === "Other"}
-                    onPress={() =>
-                      setFilters({ ...filters, category: "Other" })
-                    }
-                  />
                 </View>
               </View>
 
@@ -751,7 +726,7 @@ const styles = StyleSheet.create({
   petImage: {
     width: "100%",
     height: "100%",
-    resizeMode: "cover",
+    resizeMode: "contain",
   },
   petCategoryTag: {
     position: "absolute",
@@ -798,17 +773,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "700",
     color: "#FFFFFF",
-  },
-  loveButtonTop: {
-    position: "absolute",
-    top: 16,
-    right: 16,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "center",
-    alignItems: "center",
   },
   petInfo: {
     padding: 16,

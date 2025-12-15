@@ -1,31 +1,37 @@
-import { useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useAuth, useUser } from "@clerk/clerk-expo";
+import { useLocalSearchParams } from "expo-router";
+import { useCallback, useEffect, useState } from "react";
 import { Alert } from "react-native";
 import { GiftedChat } from "react-native-gifted-chat";
-import { supabase } from "../../config/supabaseClient";
+import { createClerkSupabaseClient } from "../../config/supabaseClient";
 
 export default function ChatScreen() {
-  const { id } = useLocalSearchParams();
-  const router = useRouter();
+  const { id } = useLocalSearchParams(); // chat_id
+  const { user } = useUser();
+  const { getToken } = useAuth();
 
   const [messages, setMessages] = useState([]);
-  const [user, setUser] = useState(null);
+  const [supabase, setSupabase] = useState(null);
 
+  // ✅ สร้าง Supabase client จาก Clerk token
   useEffect(() => {
-    // ดึง user จาก Supabase Auth
-    const currentUser = supabase.auth.getUser().then(({ data }) => {
-      setUser(data.user);
-    });
+    const initSupabase = async () => {
+      const token = await getToken({ template: "supabase" });
+      if (!token) return;
+      setSupabase(createClerkSupabaseClient(token));
+    };
+
+    initSupabase();
   }, []);
 
+  // ✅ โหลดข้อความ + realtime
   useEffect(() => {
-    if (!id) return;
+    if (!id || !supabase) return;
 
-    fetchChatMessages();
+    fetchMessages();
 
-    // สมัครฟัง realtime changes จากตาราง messages ของ chat room นี้
-    const subscription = supabase
-      .channel(`public:messages:id=eq.${id}`)
+    const channel = supabase
+      .channel(`chat-${id}`)
       .on(
         "postgres_changes",
         {
@@ -36,18 +42,18 @@ export default function ChatScreen() {
         },
         (payload) => {
           const newMessage = mapMessage(payload.new);
-          setMessages((previous) => GiftedChat.append(previous, [newMessage]));
+          setMessages((prev) => GiftedChat.append(prev, [newMessage]));
         }
       )
       .subscribe();
 
     return () => {
-      supabase.removeChannel(subscription);
+      supabase.removeChannel(channel);
     };
-  }, [id]);
+  }, [id, supabase]);
 
-  // ฟังก์ชันดึงข้อความจาก Supabase
-  const fetchChatMessages = async () => {
+  // ✅ ดึงข้อความเก่า
+  const fetchMessages = async () => {
     const { data, error } = await supabase
       .from("messages")
       .select("*")
@@ -55,15 +61,14 @@ export default function ChatScreen() {
       .order("created_at", { ascending: false });
 
     if (error) {
-      Alert.alert("Error", "Failed to fetch messages.");
+      Alert.alert("Error", "โหลดข้อความไม่สำเร็จ");
       return;
     }
 
-    const mappedMessages = data.map(mapMessage);
-    setMessages(mappedMessages);
+    setMessages(data.map(mapMessage));
   };
 
-  // แปลงโครงสร้าง message จาก DB ให้เข้ากับ GiftedChat
+  // ✅ แปลง message ให้ GiftedChat
   const mapMessage = (msg) => ({
     _id: msg.id,
     text: msg.text,
@@ -75,35 +80,44 @@ export default function ChatScreen() {
     },
   });
 
-  // ฟังก์ชันส่งข้อความใหม่
-  const onSend = async (newMessages = []) => {
-    if (!user) {
-      Alert.alert("Error", "User not logged in.");
-      return;
-    }
+  // ✅ ส่งข้อความ
+  const onSend = useCallback(
+    async (newMessages = []) => {
+      if (!user || !supabase) return;
 
-    const message = {
-      chat_id: id,
-      text: newMessages[0].text,
-      user_id: user.id,
-      user_name: user.user_metadata?.full_name || "Unknown",
-      user_avatar_url: user.user_metadata?.avatar_url || null,
-      created_at: new Date().toISOString(),
-    };
+      const newMessage = newMessages[0];
 
-    // Optimistic update UI
-    setMessages((previous) =>
-      GiftedChat.append(previous, [mapMessage({ id: Math.random(), ...message })])
-    );
+      const messageData = {
+        chat_id: id,
+        text: newMessage.text,
+        user_id: user.id,
+        user_name: user.fullName || "Unknown",
+        user_avatar_url: user.imageUrl || null,
+      };
 
-    // ส่งข้อมูลไปยัง Supabase
-    const { error } = await supabase.from("messages").insert([message]);
+      // optimistic UI
+      setMessages((prev) =>
+        GiftedChat.append(prev, [
+          {
+            ...newMessage,
+            user: {
+              _id: user.id,
+              name: user.fullName,
+              avatar: user.imageUrl,
+            },
+          },
+        ])
+      );
 
-    if (error) {
-      Alert.alert("Error", "Failed to send message.");
-      console.error(error);
-    }
-  };
+      const { error } = await supabase.from("messages").insert([messageData]);
+
+      if (error) {
+        Alert.alert("Error", "ส่งข้อความไม่สำเร็จ");
+        console.error(error);
+      }
+    },
+    [user, supabase]
+  );
 
   return (
     <GiftedChat
@@ -111,8 +125,8 @@ export default function ChatScreen() {
       onSend={onSend}
       user={{
         _id: user?.id,
-        name: user?.user_metadata?.full_name,
-        avatar: user?.user_metadata?.avatar_url,
+        name: user?.fullName,
+        avatar: user?.imageUrl,
       }}
       showUserAvatar
       alwaysShowSend
