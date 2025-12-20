@@ -2,6 +2,7 @@ import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { ActivityIndicator, View } from "react-native";
+import SyncUser from "../components/SyncUser"; // ✅
 import ClerkWrapper from "../config/clerkProvider";
 
 export default function RootLayout() {
@@ -28,21 +29,27 @@ export default function RootLayout() {
 
   return (
     <ClerkWrapper>
+      <SyncUser /> {/* ✅ แบบนี้ถูก */}
       <StatusBar style="dark" />
       <Stack>
         {/* routes */}
         <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="login/index" options={{ headerShown: false }} />
         <Stack.Screen name="register/index" options={{ headerShown: false }} />
-        <Stack.Screen name="edit-profile/EditProfile" options={{ headerShown: false }} />
+        <Stack.Screen
+          name="edit-profile/EditProfile"
+          options={{ headerShown: false }}
+        />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="admin" options={{ headerShown: false }} />
-        <Stack.Screen name="Favorite/favorite" options={{ headerShown: false }} />
-        <Stack.Screen name="add-new-pet/index" options={{ headerShown: false }} />
-        {/* <Stack.Screen name="admin/_layout" options={{ headerShown: false }} />
-        <Stack.Screen name="admin/dashboard" options={{ headerShown: false }} />
-        <Stack.Screen name="admin/user" options={{ headerShown: false }} />
-        <Stack.Screen name="admin/notifications" options={{ headerShown: false }} /> */}
+        <Stack.Screen
+          name="Favorite/favorite"
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="add-new-pet/index"
+          options={{ headerShown: false }}
+        />
       </Stack>
     </ClerkWrapper>
   );

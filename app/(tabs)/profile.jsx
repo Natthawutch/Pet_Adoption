@@ -6,7 +6,6 @@ import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Dimensions,
   FlatList,
   Image,
   RefreshControl,
@@ -19,105 +18,161 @@ import {
 import { createClerkSupabaseClient } from "../../config/supabaseClient";
 import Colors from "../../constants/Colors";
 
-const screenWidth = Dimensions.get("window").width;
-const imageSize = (screenWidth - 8) / 3;
-
 export default function Profile() {
   const router = useRouter();
   const { user } = useUser();
   const { getToken, signOut } = useAuth();
 
-  const [profileUser, setProfileUser] = useState(null);
+  const [profile, setProfile] = useState(null);
+  const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
-  const [posts, setPosts] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [tab, setTab] = useState("posts");
 
   useEffect(() => {
-    if (!user) {
-      router.replace("/login");
-      return;
-    }
+    if (user) loadProfile();
   }, [user]);
 
-  const fetchPosts = async (supabase, userId) => {
-    const { data, error } = await supabase
-      .from("pets")
-      .select(
-        `
-      id,
-      image_url,
-      images,
-      video_url,
-      name,
-      post_status,
-      created_at
-    `
-      )
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false });
-
-    if (!error) setPosts(data || []);
-  };
-
-  const handleImagePick = async () => {
+  const loadProfile = async () => {
     try {
-      const { status } =
-        await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== "granted") {
-        Alert.alert("Permission required", "กรุณาอนุญาตเข้าถึงคลังภาพ");
-        return;
-      }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.8,
-      });
-
-      if (result.canceled || !result.assets?.[0]?.uri) return;
-
-      setUploading(true);
-
       const token = await getToken({ template: "supabase" });
       const supabase = createClerkSupabaseClient(token);
-      const uri = result.assets[0].uri;
-      const filename = `avatars/${user.id}/${Date.now()}.jpg`;
 
-      const { error: uploadError } = await supabase.storage
+      const { data: userData } = await supabase
+        .from("users")
+        .select("*")
+        .eq("clerk_id", user.id)
+        .single();
+
+      const { data: petPosts } = await supabase
+        .from("pets")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
+
+      setProfile(userData);
+      setPosts(petPosts || []);
+    } catch (e) {
+      console.log(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadProfile();
+    setRefreshing(false);
+  };
+
+  /* ---------------- AVATAR ---------------- */
+
+  const pickAvatar = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") return;
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (result.canceled) return;
+
+    try {
+      setUploading(true);
+      const token = await getToken({ template: "supabase" });
+      const supabase = createClerkSupabaseClient(token);
+
+      const uri = result.assets[0].uri;
+      const filePath = `avatars/${user.id}.jpg`;
+
+      await supabase.storage
         .from("user-avatars")
         .upload(
-          filename,
-          { uri, type: "image/jpeg", name: filename },
+          filePath,
+          { uri, type: "image/jpeg", name: filePath },
           { upsert: true }
         );
 
-      if (uploadError) throw uploadError;
-
       const { data } = supabase.storage
         .from("user-avatars")
-        .getPublicUrl(filename);
-      const { error: updateError } = await supabase
+        .getPublicUrl(filePath);
+
+      await supabase
         .from("users")
         .update({ avatar_url: data.publicUrl })
-        .eq("id", user.id);
+        .eq("clerk_id", user.id);
 
-      if (updateError) throw updateError;
-
-      setProfileUser((prev) => ({ ...prev, avatar_url: data.publicUrl }));
-      Alert.alert("สำเร็จ", "อัปเดตรูปโปรไฟล์แล้ว");
-    } catch (err) {
-      console.error("Upload failed:", err);
-      Alert.alert("Upload failed", err.message);
+      setProfile((p) => ({ ...p, avatar_url: data.publicUrl }));
+    } catch {
+      Alert.alert("เกิดข้อผิดพลาด");
     } finally {
       setUploading(false);
     }
   };
 
-  const handleLogout = async () => {
+  /* ---------------- POST ACTIONS ---------------- */
+
+  const openPostMenu = (pet) => {
+    Alert.alert("จัดการโพสต์", pet.name, [
+      {
+        text: "แก้ไข",
+        onPress: () =>
+          router.push({
+            pathname: "/edit-pet",
+            params: { id: pet.id },
+          }),
+      },
+      {
+        text: "ลบ",
+        style: "destructive",
+        onPress: () => confirmDeletePet(pet),
+      },
+      { text: "ยกเลิก" },
+    ]);
+  };
+
+  const confirmDeletePet = (pet) => {
+    Alert.alert("ลบโพสต์", "คุณแน่ใจหรือไม่? การลบไม่สามารถกู้คืนได้", [
+      { text: "ยกเลิก" },
+      {
+        text: "ลบ",
+        style: "destructive",
+        onPress: () => deletePet(pet),
+      },
+    ]);
+  };
+
+  const deletePet = async (pet) => {
+    try {
+      const token = await getToken({ template: "supabase" });
+      const supabase = createClerkSupabaseClient(token);
+
+      // ลบรูปจาก storage
+      if (pet.image_url) {
+        const path = pet.image_url.split("/storage/v1/object/public/")[1];
+        if (path) {
+          await supabase.storage.from("pet-images").remove([path]);
+        }
+      }
+
+      // ลบข้อมูล
+      await supabase.from("pets").delete().eq("id", pet.id);
+
+      // update UI
+      setPosts((prev) => prev.filter((p) => p.id !== pet.id));
+    } catch {
+      Alert.alert("ลบไม่สำเร็จ");
+    }
+  };
+
+  /* ---------------- LOGOUT ---------------- */
+
+  const logout = () => {
     Alert.alert("ออกจากระบบ", "คุณแน่ใจหรือไม่?", [
-      { text: "ยกเลิก", style: "cancel" },
+      { text: "ยกเลิก" },
       {
         text: "ออกจากระบบ",
         style: "destructive",
@@ -129,230 +184,230 @@ export default function Profile() {
     ]);
   };
 
-  const onRefresh = async () => {
-    setRefreshing(true);
-    try {
-      const token = await getToken({ template: "supabase" });
-      const supabase = createClerkSupabaseClient(token);
-      if (user?.id) await fetchPosts(supabase, user.id);
-    } finally {
-      setRefreshing(false);
-    }
-  };
-
-  if (loading || !profileUser) {
+  if (loading)
     return (
-      <View style={styles.loadingContainer}>
+      <View style={styles.center}>
         <ActivityIndicator size="large" color={Colors.PURPLE} />
-        <Text style={styles.loadingText}>กำลังโหลดข้อมูล...</Text>
       </View>
     );
-  }
 
   return (
     <ScrollView
-      style={styles.container}
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
       }
+      style={styles.container}
     >
-      {/* 🪪 Profile Card */}
-      <View style={styles.profileCard}>
-        <TouchableOpacity onPress={handleImagePick} disabled={uploading}>
-          <View style={styles.avatarWrapper}>
-            <Image
-              source={{
-                uri:
-                  user?.imageUrl ||
-                  profileUser.avatar_url ||
-                  "https://www.gravatar.com/avatar/?d=mp",
-              }}
-              style={styles.avatar}
-            />
-            {uploading && (
-              <View style={styles.overlay}>
-                <ActivityIndicator color="#fff" />
-              </View>
-            )}
-            <View style={styles.cameraIcon}>
-              <Ionicons name="camera" size={16} color="#fff" />
-            </View>
+      {/* HEADER */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={pickAvatar} disabled={uploading}>
+          <Image
+            source={{
+              uri:
+                profile?.avatar_url ||
+                user?.imageUrl ||
+                "https://www.gravatar.com/avatar/?d=mp",
+            }}
+            style={styles.avatar}
+          />
+          <View style={styles.camera}>
+            <Ionicons name="camera" size={16} color="#fff" />
           </View>
         </TouchableOpacity>
 
-        <Text style={styles.name}>
-          {user?.fullName || profileUser?.full_name || "ผู้ใช้ไม่ระบุชื่อ"}
-        </Text>
-        <Text style={styles.email}>
-          {user?.primaryEmailAddress?.emailAddress}
-        </Text>
-        <Text style={styles.bio}>
-          {profileUser.bio || "ยังไม่มีคำอธิบายส่วนตัว"}
-        </Text>
+        <Text style={styles.name}>{user?.fullName || "ผู้ใช้งาน"}</Text>
 
-        <View style={styles.statsRow}>
-          <View style={styles.statBox}>
-            <Text style={styles.statValue}>{posts.length}</Text>
-            <Text style={styles.statLabel}>โพสต์</Text>
-          </View>
-        </View>
-
-        {/* ปุ่ม */}
-        <View style={styles.buttonRow}>
-          <TouchableOpacity
-            onPress={() => router.push("/edit-profile/EditProfile")}
-            style={styles.primaryButton}
-          >
-            <Ionicons name="create-outline" size={18} color="#fff" />
-            <Text style={styles.primaryButtonText}>แก้ไขโปรไฟล์</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
-            <Ionicons name="log-out-outline" size={18} color="#fff" />
-          </TouchableOpacity>
+        <View style={styles.badge}>
+          <Ionicons name="paw" size={14} color="#fff" />
+          <Text style={styles.badgeText}>ผู้ใช้งานทั่วไป</Text>
         </View>
       </View>
 
-      {/* 🖼️ โพสต์ */}
-      <View style={styles.postsSection}>
-        <Text style={styles.sectionTitle}>โพสต์ของฉัน</Text>
+      {/* STATS */}
+      <View style={styles.statsRow}>
+        <Stat title="โพสต์สัตว์" value={posts.length} icon="paw" />
+        <Stat title="รับเลี้ยง" value="0" icon="heart" />
+        <Stat title="ดูแลอยู่" value="0" icon="medkit" />
+      </View>
 
-        {posts.length ? (
-          <FlatList
-            data={posts}
-            numColumns={3}
-            scrollEnabled={false}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
+      {/* TABS */}
+      <View style={styles.tabs}>
+        <Tab
+          label="โพสต์สัตว์"
+          active={tab === "posts"}
+          onPress={() => setTab("posts")}
+        />
+        <Tab
+          label="ประวัติรับเลี้ยง"
+          active={tab === "history"}
+          onPress={() => setTab("history")}
+        />
+      </View>
+
+      {/* POSTS */}
+      {tab === "posts" && (
+        <FlatList
+          data={posts}
+          scrollEnabled={false}
+          keyExtractor={(i) => i.id}
+          renderItem={({ item }) => (
+            <View style={styles.petCard}>
               <TouchableOpacity
+                style={{ flexDirection: "row", flex: 1 }}
                 onPress={() =>
                   router.push({
                     pathname: "/pet-details",
                     params: { id: item.id },
                   })
                 }
-                style={styles.postItem}
               >
                 <Image
                   source={{ uri: item.image_url }}
-                  style={styles.postImage}
+                  style={styles.petImage}
                 />
+                <View style={styles.petInfo}>
+                  <Text style={styles.petName}>{item.name}</Text>
+                  <Text style={styles.petStatus}>{item.post_status}</Text>
+                </View>
               </TouchableOpacity>
-            )}
-          />
-        ) : (
-          <View style={styles.emptyState}>
-            <Ionicons name="images-outline" size={50} color="#aaa" />
-            <Text style={styles.emptyText}>ยังไม่มีโพสต์</Text>
-            <TouchableOpacity
-              onPress={() => router.push("/add-new-pet")}
-              style={styles.newPostButton}
-            >
-              <Text style={styles.newPostText}>สร้างโพสต์แรก</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-      </View>
+
+              <TouchableOpacity
+                style={styles.moreBtn}
+                onPress={() => openPostMenu(item)}
+              >
+                <Ionicons name="ellipsis-vertical" size={18} color="#555" />
+              </TouchableOpacity>
+            </View>
+          )}
+        />
+      )}
+
+      {tab === "history" && (
+        <Text style={styles.empty}>ยังไม่มีประวัติการรับเลี้ยง</Text>
+      )}
+
+      <TouchableOpacity style={styles.logout} onPress={logout}>
+        <Ionicons name="log-out-outline" size={18} color="#fff" />
+        <Text style={styles.logoutText}>ออกจากระบบ</Text>
+      </TouchableOpacity>
     </ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#FAFAFA", paddingTop: 50 },
-  loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
-  loadingText: { marginTop: 12, fontSize: 16, color: Colors.PURPLE },
+/* ---------------- COMPONENTS ---------------- */
 
-  profileCard: {
-    margin: 20,
-    backgroundColor: "#fff",
-    borderRadius: 20,
+const Stat = ({ title, value, icon }) => (
+  <View style={styles.statCard}>
+    <Ionicons name={icon} size={20} color={Colors.PURPLE} />
+    <Text style={styles.statValue}>{value}</Text>
+    <Text style={styles.statLabel}>{title}</Text>
+  </View>
+);
+
+const Tab = ({ label, active, onPress }) => (
+  <TouchableOpacity
+    onPress={onPress}
+    style={[styles.tab, active && styles.tabActive]}
+  >
+    <Text style={[styles.tabText, active && styles.tabTextActive]}>
+      {label}
+    </Text>
+  </TouchableOpacity>
+);
+
+/* ---------------- STYLES ---------------- */
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: "#FAFAFA" },
+  center: { flex: 1, justifyContent: "center", alignItems: "center" },
+
+  header: {
+    backgroundColor: Colors.PURPLE,
     alignItems: "center",
-    paddingVertical: 25,
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 3,
+    paddingBottom: 30,
+    paddingTop: 60,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
   },
-  avatarWrapper: { position: "relative" },
   avatar: { width: 100, height: 100, borderRadius: 50 },
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.4)",
-    borderRadius: 50,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  cameraIcon: {
+  camera: {
     position: "absolute",
     bottom: 0,
     right: 0,
-    backgroundColor: Colors.PURPLE,
-    borderRadius: 14,
+    backgroundColor: "#0008",
+    borderRadius: 12,
     padding: 6,
   },
-  name: { fontSize: 20, fontWeight: "700", marginTop: 12, color: "#333" },
-  email: { color: "#777", fontSize: 14, marginTop: 2 },
-  bio: {
-    color: "#555",
-    fontSize: 14,
-    marginTop: 8,
-    textAlign: "center",
-    paddingHorizontal: 20,
+  name: { color: "#fff", fontSize: 20, fontWeight: "700", marginTop: 12 },
+  badge: {
+    flexDirection: "row",
+    backgroundColor: "#22c55e",
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 20,
+    marginTop: 6,
+    alignItems: "center",
+    gap: 4,
   },
+  badgeText: { color: "#fff", fontSize: 12 },
 
   statsRow: {
     flexDirection: "row",
-    marginTop: 16,
     justifyContent: "space-around",
-    width: "80%",
+    marginTop: -20,
   },
-  statBox: { alignItems: "center" },
-  statValue: { fontSize: 18, fontWeight: "700", color: Colors.PURPLE },
-  statLabel: { color: "#666", fontSize: 13, marginTop: 3 },
-
-  buttonRow: {
-    flexDirection: "row",
-    marginTop: 20,
-    gap: 10,
-  },
-  primaryButton: {
-    flexDirection: "row",
+  statCard: {
+    backgroundColor: "#fff",
+    width: "30%",
+    borderRadius: 16,
+    padding: 12,
     alignItems: "center",
-    backgroundColor: Colors.PURPLE,
-    paddingVertical: 10,
-    paddingHorizontal: 18,
-    borderRadius: 10,
+    elevation: 3,
   },
-  primaryButtonText: { color: "#fff", fontWeight: "600", marginLeft: 6 },
-  logoutButton: {
-    backgroundColor: "#f35b5b",
-    padding: 10,
-    borderRadius: 10,
-  },
+  statValue: { fontSize: 18, fontWeight: "700", marginTop: 4 },
+  statLabel: { fontSize: 12, color: "#777" },
 
-  postsSection: { marginTop: 20, paddingHorizontal: 16 },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    marginBottom: 12,
-    color: "#333",
+  tabs: {
+    flexDirection: "row",
+    margin: 16,
+    backgroundColor: "#eee",
+    borderRadius: 14,
   },
-  postItem: {
-    width: imageSize,
-    height: imageSize,
-    margin: 1,
-    borderRadius: 8,
-    overflow: "hidden",
+  tab: { flex: 1, padding: 10, alignItems: "center" },
+  tabActive: { backgroundColor: "#fff", borderRadius: 14 },
+  tabText: { color: "#777" },
+  tabTextActive: { color: Colors.PURPLE, fontWeight: "600" },
+
+  petCard: {
+    flexDirection: "row",
+    backgroundColor: "#fff",
+    margin: 12,
+    borderRadius: 14,
+    elevation: 2,
   },
-  postImage: { width: "100%", height: "100%" },
-  emptyState: { alignItems: "center", paddingVertical: 50 },
-  emptyText: { color: "#777", marginTop: 10, fontSize: 16 },
-  newPostButton: {
-    backgroundColor: Colors.PURPLE,
-    marginTop: 20,
-    paddingVertical: 10,
-    paddingHorizontal: 22,
-    borderRadius: 20,
+  petImage: {
+    width: 90,
+    height: 90,
+    borderTopLeftRadius: 14,
+    borderBottomLeftRadius: 14,
   },
-  newPostText: { color: "#fff", fontWeight: "600" },
+  petInfo: { padding: 10, justifyContent: "center", flex: 1 },
+  petName: { fontWeight: "700", fontSize: 16 },
+  petStatus: { color: "#22c55e", marginTop: 4 },
+
+  moreBtn: { paddingHorizontal: 12, justifyContent: "center" },
+
+  empty: { textAlign: "center", marginTop: 40, color: "#777" },
+
+  logout: {
+    margin: 20,
+    backgroundColor: "#ef4444",
+    borderRadius: 14,
+    padding: 12,
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 6,
+  },
+  logoutText: { color: "#fff", fontWeight: "600" },
 });
