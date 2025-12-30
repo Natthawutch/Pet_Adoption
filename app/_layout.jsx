@@ -2,7 +2,7 @@ import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { ActivityIndicator, View } from "react-native";
-import SyncUser from "../components/SyncUser"; // ✅
+import AuthWrapper from "../components/AuthWrapper"; // ✅ ใช้ AuthWrapper แทน SyncUser
 import ClerkWrapper from "../config/clerkProvider";
 
 export default function RootLayout() {
@@ -22,34 +22,27 @@ export default function RootLayout() {
           backgroundColor: "#fff",
         }}
       >
-        <ActivityIndicator size="large" />
+        <ActivityIndicator size="large" color="#8B5CF6" />
       </View>
     );
   }
 
   return (
     <ClerkWrapper>
-      <SyncUser /> {/* ✅ แบบนี้ถูก */}
+      <AuthWrapper /> {/* ✅ ใช้ AuthWrapper จัดการ auth flow */}
       <StatusBar style="dark" />
-      <Stack>
-        {/* routes */}
-        <Stack.Screen name="index" options={{ headerShown: false }} />
-        <Stack.Screen name="login/index" options={{ headerShown: false }} />
-        <Stack.Screen name="register/index" options={{ headerShown: false }} />
-        <Stack.Screen
-          name="edit-profile/EditProfile"
-          options={{ headerShown: false }}
-        />
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="admin" options={{ headerShown: false }} />
-        <Stack.Screen
-          name="Favorite/favorite"
-          options={{ headerShown: false }}
-        />
-        <Stack.Screen
-          name="add-new-pet/index"
-          options={{ headerShown: false }}
-        />
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="index" />
+        <Stack.Screen name="login/index" />
+        <Stack.Screen name="register/index" />
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="admin" />
+        <Stack.Screen name="add-new-pet/index" />
+        <Stack.Screen name="pet-details/index" />
+        <Stack.Screen name="chat/index" />
+        <Stack.Screen name="Favorite/favorite" />
+        <Stack.Screen name="Inbox/inbox" />
+        <Stack.Screen name="user-post/index" />
       </Stack>
     </ClerkWrapper>
   );

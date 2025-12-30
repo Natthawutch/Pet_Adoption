@@ -1,4 +1,4 @@
-import { useAuth, useOAuth, useSignIn, useUser } from "@clerk/clerk-expo";
+import { useAuth, useOAuth, useSignIn } from "@clerk/clerk-expo";
 import { Link, useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import { useState } from "react";
@@ -14,64 +14,32 @@ import {
   TouchableOpacity
 } from "react-native";
 
-import { createClerkSupabaseClient } from "../../config/supabaseClient";
 import Colors from "../../constants/Colors";
-import { saveAdminStatus } from "../utils/admin storage";
 
 WebBrowser.maybeCompleteAuthSession();
 
 export default function SignInScreen() {
   const router = useRouter();
-
   const { signIn, setActive, isLoaded } = useSignIn();
-  const { isSignedIn, getToken } = useAuth();
-  const { user } = useUser();
+  const { isSignedIn } = useAuth();
 
   const [emailAddress, setEmailAddress] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [focusedInput, setFocusedInput] = useState(null);
 
   const { startOAuthFlow: startGoogleOAuth } = useOAuth({
     strategy: "oauth_google",
   });
 
-  /* ---------------- ROLE CHECK ---------------- */
-  const checkUserRole = async (token, clerkUser) => {
-    try {
-      const supabase = createClerkSupabaseClient(token);
-
-      const { data: existingUser } = await supabase
-        .from("users")
-        .select("role")
-        .eq("clerk_id", clerkUser.id)
-        .single();
-
-      if (existingUser) return existingUser.role;
-
-      const adminEmails = ["admin@gmail.com"];
-      const isAdmin = adminEmails.includes(
-        clerkUser.primaryEmailAddress?.emailAddress
-      );
-
-      await supabase.from("users").insert({
-        clerk_id: clerkUser.id,
-        email: clerkUser.primaryEmailAddress?.emailAddress,
-        full_name: clerkUser.fullName ?? "User",
-        role: isAdmin ? "admin" : "user",
-      });
-
-      return isAdmin ? "admin" : "user";
-    } catch (error) {
-      console.log("❌ checkUserRole error:", error);
-      return "user";
-    }
-  };
-
   /* ---------------- EMAIL LOGIN ---------------- */
   const onSignInPress = async () => {
     if (!isLoaded || isSignedIn) {
-      Alert.alert("คุณเข้าสู่ระบบอยู่แล้ว");
+      Alert.alert("แจ้งเตือน", "คุณเข้าสู่ระบบอยู่แล้ว");
+      return;
+    }
+
+    if (!emailAddress || !password) {
+      Alert.alert("แจ้งเตือน", "กรุณากรอกอีเมลและรหัสผ่าน");
       return;
     }
 
@@ -85,18 +53,13 @@ export default function SignInScreen() {
 
       if (result.status === "complete") {
         await setActive({ session: result.createdSessionId });
-
-        const token = await getToken({ template: "supabase" });
-        const role = await checkUserRole(token, user);
-
-        await saveAdminStatus(role === "admin");
-        router.replace(role === "admin" ? "/admin" : "/(tabs)/home");
+        // ✅ AuthWrapper จะจัดการ redirect ให้อัตโนมัติ
       }
     } catch (err) {
       console.error("❌ Sign in error:", err);
       Alert.alert(
         "เข้าสู่ระบบไม่สำเร็จ",
-        err.errors?.[0]?.message || "บัญชีนี้กำลังล็อกอินอยู่"
+        err.errors?.[0]?.message || "อีเมลหรือรหัสผ่านไม่ถูกต้อง"
       );
     } finally {
       setLoading(false);
@@ -106,7 +69,7 @@ export default function SignInScreen() {
   /* ---------------- GOOGLE LOGIN ---------------- */
   const handleGoogleLogin = async () => {
     if (isSignedIn) {
-      Alert.alert("คุณเข้าสู่ระบบอยู่แล้ว");
+      Alert.alert("แจ้งเตือน", "คุณเข้าสู่ระบบอยู่แล้ว");
       return;
     }
 
@@ -115,11 +78,11 @@ export default function SignInScreen() {
 
       if (createdSessionId) {
         await setActive({ session: createdSessionId });
-        router.replace("/(tabs)/home");
+        // ✅ AuthWrapper จะจัดการ redirect ให้อัตโนมัติ
       }
     } catch (err) {
       console.error("❌ Google OAuth error:", err);
-      Alert.alert("เข้าสู่ระบบไม่สำเร็จ");
+      Alert.alert("เข้าสู่ระบบไม่สำเร็จ", "กรุณาลองใหม่อีกครั้ง");
     }
   };
 
@@ -141,6 +104,7 @@ export default function SignInScreen() {
           value={emailAddress}
           onChangeText={setEmailAddress}
           autoCapitalize="none"
+          keyboardType="email-address"
         />
 
         <TextInput
@@ -166,6 +130,7 @@ export default function SignInScreen() {
         <TouchableOpacity
           style={styles.googleButton}
           onPress={handleGoogleLogin}
+          disabled={loading}
         >
           <Text style={styles.googleText}>เข้าสู่ระบบด้วย Google</Text>
         </TouchableOpacity>
@@ -180,7 +145,6 @@ export default function SignInScreen() {
   );
 }
 
-/* ---------------- STYLES ---------------- */
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#fff" },
   scrollContent: {
@@ -201,6 +165,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
+    fontSize: 16,
   },
   button: {
     backgroundColor: Colors.PURPLE || "#8B5CF6",
@@ -216,12 +181,14 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     alignItems: "center",
+    marginBottom: 16,
   },
-  googleText: { fontWeight: "600" },
+  googleText: { fontWeight: "600", fontSize: 16 },
   link: {
     marginTop: 24,
     textAlign: "center",
     color: Colors.PURPLE || "#8B5CF6",
     fontWeight: "600",
+    fontSize: 16,
   },
 });

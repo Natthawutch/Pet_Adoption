@@ -1,7 +1,15 @@
 import { useAuth, useUser } from "@clerk/clerk-expo";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import { clearAdminStatus } from "../../utils/adminStorage";
 
 export default function AdminProfile() {
   const { user } = useUser();
@@ -9,12 +17,26 @@ export default function AdminProfile() {
   const router = useRouter();
 
   const handleLogout = async () => {
-    try {
-      await signOut();
-      router.replace("/home");
-    } catch (err) {
-      console.log("Logout Error:", err);
-    }
+    Alert.alert("ออกจากระบบ", "คุณต้องการออกจากระบบใช่หรือไม่?", [
+      {
+        text: "ยกเลิก",
+        style: "cancel",
+      },
+      {
+        text: "ออกจากระบบ",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await clearAdminStatus(); // ✅ เคลียร์สถานะ admin
+            await signOut();
+            router.replace("/login");
+          } catch (err) {
+            console.error("❌ Logout Error:", err);
+            Alert.alert("เกิดข้อผิดพลาด", "ไม่สามารถออกจากระบบได้");
+          }
+        },
+      },
+    ]);
   };
 
   const adminStats = [
@@ -109,15 +131,17 @@ export default function AdminProfile() {
             ]}
           >
             <Ionicons name="log-out-outline" size={20} color="#dc2626" />
-            <Text style={styles.logoutText}>Logout</Text>
+            <Text style={styles.logoutText}>ออกจากระบบ</Text>
           </Pressable>
         </View>
 
-        <View style={{ height: 40 }} />
+        <View style={{ height: 100 }} />
       </ScrollView>
     </View>
   );
 }
+
+// ... styles เหมือนเดิม
 
 const styles = StyleSheet.create({
   container: {

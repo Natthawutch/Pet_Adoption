@@ -6,14 +6,13 @@ import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  FlatList,
   Image,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
-  View,
+  View
 } from "react-native";
 import { createClerkSupabaseClient } from "../../config/supabaseClient";
 import Colors from "../../constants/Colors";
@@ -39,12 +38,14 @@ export default function Profile() {
       const token = await getToken({ template: "supabase" });
       const supabase = createClerkSupabaseClient(token);
 
+      // 1. ดึงข้อมูล User
       const { data: userData } = await supabase
         .from("users")
         .select("*")
         .eq("clerk_id", user.id)
         .single();
 
+      // 2. ดึงข้อมูลโพสต์สัตว์ของ User นี้
       const { data: petPosts } = await supabase
         .from("pets")
         .select("*")
@@ -54,7 +55,7 @@ export default function Profile() {
       setProfile(userData);
       setPosts(petPosts || []);
     } catch (e) {
-      console.log(e);
+      console.log("Error loading profile:", e);
     } finally {
       setLoading(false);
     }
@@ -66,11 +67,17 @@ export default function Profile() {
     setRefreshing(false);
   };
 
-  /* ---------------- AVATAR ---------------- */
+  /* ---------------- AVATAR ACTIONS ---------------- */
 
   const pickAvatar = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== "granted") return;
+    if (status !== "granted") {
+      Alert.alert(
+        "ขออภัย",
+        "เราต้องการสิทธิ์การเข้าถึงคลังรูปภาพเพื่อเปลี่ยนรูปโปรไฟล์"
+      );
+      return;
+    }
 
     const result = await ImagePicker.launchImageLibraryAsync({
       allowsEditing: true,
@@ -86,15 +93,17 @@ export default function Profile() {
       const supabase = createClerkSupabaseClient(token);
 
       const uri = result.assets[0].uri;
-      const filePath = `avatars/${user.id}.jpg`;
+      const fileExt = uri.split(".").pop();
+      const filePath = `avatars/${user.id}-${Date.now()}.${fileExt}`;
 
-      await supabase.storage
+      const response = await fetch(uri);
+      const blob = await response.blob();
+
+      const { error: uploadError } = await supabase.storage
         .from("user-avatars")
-        .upload(
-          filePath,
-          { uri, type: "image/jpeg", name: filePath },
-          { upsert: true }
-        );
+        .upload(filePath, blob, { upsert: true });
+
+      if (uploadError) throw uploadError;
 
       const { data } = supabase.storage
         .from("user-avatars")
@@ -106,10 +115,38 @@ export default function Profile() {
         .eq("clerk_id", user.id);
 
       setProfile((p) => ({ ...p, avatar_url: data.publicUrl }));
-    } catch {
-      Alert.alert("เกิดข้อผิดพลาด");
+      Alert.alert("สำเร็จ", "เปลี่ยนรูปโปรไฟล์เรียบร้อยแล้ว");
+    } catch (e) {
+      Alert.alert("เกิดข้อผิดพลาด", "ไม่สามารถอัปโหลดรูปภาพได้");
     } finally {
       setUploading(false);
+    }
+  };
+
+  /* ---------------- VOLUNTEER ACTIONS ---------------- */
+
+  const applyVolunteer = () => {
+    Alert.alert(
+      "สมัครอาสาสมัคร",
+      "คุณต้องการส่งคำขอสมัครเป็นอาสาสมัครเพื่อช่วยตรวจสอบสัตว์จรจัดใช่หรือไม่?",
+      [{ text: "ยกเลิก" }, { text: "สมัคร", onPress: submitVolunteer }]
+    );
+  };
+
+  const submitVolunteer = async () => {
+    try {
+      const token = await getToken({ template: "supabase" });
+      const supabase = createClerkSupabaseClient(token);
+
+      await supabase
+        .from("users")
+        .update({ role: "volunteer_pending" })
+        .eq("clerk_id", user.id);
+
+      Alert.alert("สำเร็จ", "ส่งคำขอสมัครอาสาแล้ว รอการอนุมัติจากผู้ดูแลระบบ");
+      loadProfile();
+    } catch {
+      Alert.alert("เกิดข้อผิดพลาด");
     }
   };
 
@@ -120,10 +157,7 @@ export default function Profile() {
       {
         text: "แก้ไข",
         onPress: () =>
-          router.push({
-            pathname: "/edit-pet",
-            params: { id: pet.id },
-          }),
+          router.push({ pathname: "/edit-pet", params: { id: pet.id } }),
       },
       {
         text: "ลบ",
@@ -135,13 +169,9 @@ export default function Profile() {
   };
 
   const confirmDeletePet = (pet) => {
-    Alert.alert("ลบโพสต์", "คุณแน่ใจหรือไม่? การลบไม่สามารถกู้คืนได้", [
+    Alert.alert("ลบโพสต์", `คุณแน่ใจหรือไม่ที่จะลบ "${pet.name}"?`, [
       { text: "ยกเลิก" },
-      {
-        text: "ลบ",
-        style: "destructive",
-        onPress: () => deletePet(pet),
-      },
+      { text: "ลบ", style: "destructive", onPress: () => deletePet(pet) },
     ]);
   };
 
@@ -150,21 +180,18 @@ export default function Profile() {
       const token = await getToken({ template: "supabase" });
       const supabase = createClerkSupabaseClient(token);
 
-      // ลบรูปจาก storage
       if (pet.image_url) {
-        const path = pet.image_url.split("/storage/v1/object/public/")[1];
-        if (path) {
-          await supabase.storage.from("pet-images").remove([path]);
-        }
+        const path = pet.image_url.split(
+          "/storage/v1/object/public/pet-images/"
+        )[1];
+        if (path) await supabase.storage.from("pet-images").remove([path]);
       }
 
-      // ลบข้อมูล
       await supabase.from("pets").delete().eq("id", pet.id);
-
-      // update UI
       setPosts((prev) => prev.filter((p) => p.id !== pet.id));
+      Alert.alert("สำเร็จ", "ลบโพสต์เรียบร้อยแล้ว");
     } catch {
-      Alert.alert("ลบไม่สำเร็จ");
+      Alert.alert("เกิดข้อผิดพลาด", "ลบไม่สำเร็จ");
     }
   };
 
@@ -191,12 +218,16 @@ export default function Profile() {
       </View>
     );
 
+  const isVolunteer = profile?.role === "volunteer";
+  const isPending = profile?.role === "volunteer_pending";
+
   return (
     <ScrollView
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
       }
       style={styles.container}
+      showsVerticalScrollIndicator={false}
     >
       {/* HEADER */}
       <View style={styles.header}>
@@ -210,24 +241,65 @@ export default function Profile() {
             }}
             style={styles.avatar}
           />
-          <View style={styles.camera}>
-            <Ionicons name="camera" size={16} color="#fff" />
-          </View>
+          {uploading ? (
+            <ActivityIndicator
+              style={styles.camera}
+              color="#fff"
+              size="small"
+            />
+          ) : (
+            <View style={styles.camera}>
+              <Ionicons name="camera" size={16} color="#fff" />
+            </View>
+          )}
         </TouchableOpacity>
 
         <Text style={styles.name}>{user?.fullName || "ผู้ใช้งาน"}</Text>
 
-        <View style={styles.badge}>
-          <Ionicons name="paw" size={14} color="#fff" />
-          <Text style={styles.badgeText}>ผู้ใช้งานทั่วไป</Text>
+        {/* ROLE BADGE */}
+        <View
+          style={[
+            styles.badge,
+            isPending && { backgroundColor: "#f59e0b" },
+            isVolunteer && { backgroundColor: "#3b82f6" },
+          ]}
+        >
+          <Ionicons
+            name={isVolunteer ? "shield-checkmark" : "paw"}
+            size={14}
+            color="#fff"
+          />
+          <Text style={styles.badgeText}>
+            {profile?.role === "user" && "ผู้ใช้งานทั่วไป"}
+            {profile?.role === "volunteer_pending" && "รออนุมัติอาสา"}
+            {profile?.role === "volunteer" && "อาสาสมัคร"}
+            {profile?.role === "admin" && "ผู้ดูแลระบบ"}
+          </Text>
         </View>
+
+        {/* APPLY VOLUNTEER BUTTON */}
+        {profile?.role === "user" && (
+          <TouchableOpacity
+            style={styles.volunteerBtn}
+            onPress={applyVolunteer}
+          >
+            <Ionicons name="heart" size={16} color="#fff" />
+            <Text style={styles.volunteerText}>สมัครเป็นอาสาสมัคร</Text>
+          </TouchableOpacity>
+        )}
+
+        {isPending && (
+          <View style={styles.pendingBadge}>
+            <Text style={styles.pendingText}>⏳ กำลังรอการอนุมัติ</Text>
+          </View>
+        )}
       </View>
 
       {/* STATS */}
       <View style={styles.statsRow}>
         <Stat title="โพสต์สัตว์" value={posts.length} icon="paw" />
         <Stat title="รับเลี้ยง" value="0" icon="heart" />
-        <Stat title="ดูแลอยู่" value="0" icon="medkit" />
+        {isVolunteer && <Stat title="ดูแลอยู่" value="0" icon="medkit" />}
       </View>
 
       {/* TABS */}
@@ -244,47 +316,58 @@ export default function Profile() {
         />
       </View>
 
-      {/* POSTS */}
-      {tab === "posts" && (
-        <FlatList
-          data={posts}
-          scrollEnabled={false}
-          keyExtractor={(i) => i.id}
-          renderItem={({ item }) => (
-            <View style={styles.petCard}>
-              <TouchableOpacity
-                style={{ flexDirection: "row", flex: 1 }}
-                onPress={() =>
-                  router.push({
-                    pathname: "/pet-details",
-                    params: { id: item.id },
-                  })
-                }
-              >
-                <Image
-                  source={{ uri: item.image_url }}
-                  style={styles.petImage}
-                />
-                <View style={styles.petInfo}>
-                  <Text style={styles.petName}>{item.name}</Text>
-                  <Text style={styles.petStatus}>{item.post_status}</Text>
-                </View>
-              </TouchableOpacity>
+      {/* POSTS LIST */}
+      <View style={{ paddingBottom: 20 }}>
+        {tab === "posts" ? (
+          posts.length > 0 ? (
+            posts.map((item) => (
+              <View key={item.id} style={styles.petCard}>
+                <TouchableOpacity
+                  style={{ flexDirection: "row", flex: 1 }}
+                  onPress={() =>
+                    router.push({
+                      pathname: "/pet-details",
+                      params: { id: item.id },
+                    })
+                  }
+                >
+                  <Image
+                    source={{ uri: item.image_url }}
+                    style={styles.petImage}
+                  />
+                  <View style={styles.petInfo}>
+                    <Text style={styles.petName}>{item.name}</Text>
+                    <Text
+                      style={[
+                        styles.petStatus,
+                        {
+                          color:
+                            item.post_status === "Available"
+                              ? "#22c55e"
+                              : "#6b7280",
+                        },
+                      ]}
+                    >
+                      {item.post_status || "สถานะไม่ระบุ"}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
 
-              <TouchableOpacity
-                style={styles.moreBtn}
-                onPress={() => openPostMenu(item)}
-              >
-                <Ionicons name="ellipsis-vertical" size={18} color="#555" />
-              </TouchableOpacity>
-            </View>
-          )}
-        />
-      )}
-
-      {tab === "history" && (
-        <Text style={styles.empty}>ยังไม่มีประวัติการรับเลี้ยง</Text>
-      )}
+                <TouchableOpacity
+                  style={styles.moreBtn}
+                  onPress={() => openPostMenu(item)}
+                >
+                  <Ionicons name="ellipsis-vertical" size={18} color="#555" />
+                </TouchableOpacity>
+              </View>
+            ))
+          ) : (
+            <Text style={styles.empty}>ยังไม่มีโพสต์สัตว์เลี้ยงของคุณ</Text>
+          )
+        ) : (
+          <Text style={styles.empty}>ยังไม่มีประวัติการรับเลี้ยง</Text>
+        )}
+      </View>
 
       <TouchableOpacity style={styles.logout} onPress={logout}>
         <Ionicons name="log-out-outline" size={18} color="#fff" />
@@ -324,90 +407,130 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: Colors.PURPLE,
     alignItems: "center",
-    paddingBottom: 30,
+    paddingBottom: 35,
     paddingTop: 60,
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
+    borderBottomLeftRadius: 35,
+    borderBottomRightRadius: 35,
   },
-  avatar: { width: 100, height: 100, borderRadius: 50 },
+  avatar: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    borderWidth: 3,
+    borderColor: "#fff",
+  },
   camera: {
     position: "absolute",
     bottom: 0,
     right: 0,
-    backgroundColor: "#0008",
-    borderRadius: 12,
-    padding: 6,
+    backgroundColor: "#333",
+    borderRadius: 15,
+    padding: 8,
+    borderWidth: 2,
+    borderColor: "#fff",
   },
-  name: { color: "#fff", fontSize: 20, fontWeight: "700", marginTop: 12 },
+  name: { color: "#fff", fontSize: 22, fontWeight: "800", marginTop: 12 },
+
   badge: {
     flexDirection: "row",
     backgroundColor: "#22c55e",
-    paddingHorizontal: 12,
-    paddingVertical: 4,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
     borderRadius: 20,
-    marginTop: 6,
+    marginTop: 8,
     alignItems: "center",
     gap: 4,
   },
-  badgeText: { color: "#fff", fontSize: 12 },
+  badgeText: { color: "#fff", fontSize: 13, fontWeight: "600" },
+
+  volunteerBtn: {
+    flexDirection: "row",
+    backgroundColor: "#ef4444",
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 25,
+    marginTop: 15,
+    alignItems: "center",
+    gap: 8,
+    elevation: 4,
+  },
+  volunteerText: { color: "#fff", fontWeight: "700", fontSize: 14 },
+
+  pendingBadge: {
+    marginTop: 10,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 10,
+  },
+  pendingText: { color: "#fff", fontWeight: "600", fontSize: 13 },
 
   statsRow: {
     flexDirection: "row",
     justifyContent: "space-around",
-    marginTop: -20,
+    marginTop: -25,
+    paddingHorizontal: 16,
   },
   statCard: {
     backgroundColor: "#fff",
-    width: "30%",
-    borderRadius: 16,
-    padding: 12,
+    width: "28%",
+    borderRadius: 20,
+    padding: 15,
     alignItems: "center",
-    elevation: 3,
+    elevation: 5,
+    shadowColor: "#000",
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
   },
-  statValue: { fontSize: 18, fontWeight: "700", marginTop: 4 },
-  statLabel: { fontSize: 12, color: "#777" },
+  statValue: { fontSize: 20, fontWeight: "800", marginTop: 4, color: "#333" },
+  statLabel: { fontSize: 12, color: "#888", fontWeight: "500" },
 
   tabs: {
     flexDirection: "row",
-    margin: 16,
-    backgroundColor: "#eee",
-    borderRadius: 14,
+    margin: 20,
+    backgroundColor: "#F0F0F0",
+    borderRadius: 15,
+    padding: 4,
   },
-  tab: { flex: 1, padding: 10, alignItems: "center" },
-  tabActive: { backgroundColor: "#fff", borderRadius: 14 },
-  tabText: { color: "#777" },
-  tabTextActive: { color: Colors.PURPLE, fontWeight: "600" },
+  tab: { flex: 1, paddingVertical: 12, alignItems: "center" },
+  tabActive: { backgroundColor: "#fff", borderRadius: 12, elevation: 2 },
+  tabText: { color: "#888", fontWeight: "500" },
+  tabTextActive: { color: Colors.PURPLE, fontWeight: "700" },
 
   petCard: {
     flexDirection: "row",
     backgroundColor: "#fff",
-    margin: 12,
-    borderRadius: 14,
-    elevation: 2,
+    marginHorizontal: 20,
+    marginBottom: 12,
+    borderRadius: 16,
+    elevation: 3,
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
   },
   petImage: {
     width: 90,
     height: 90,
-    borderTopLeftRadius: 14,
-    borderBottomLeftRadius: 14,
+    borderTopLeftRadius: 16,
+    borderBottomLeftRadius: 16,
   },
-  petInfo: { padding: 10, justifyContent: "center", flex: 1 },
-  petName: { fontWeight: "700", fontSize: 16 },
-  petStatus: { color: "#22c55e", marginTop: 4 },
+  petInfo: { padding: 12, justifyContent: "center", flex: 1 },
+  petName: { fontWeight: "700", fontSize: 17, color: "#333" },
+  petStatus: { fontSize: 13, marginTop: 4, fontWeight: "600" },
+  moreBtn: { paddingHorizontal: 15, justifyContent: "center" },
 
-  moreBtn: { paddingHorizontal: 12, justifyContent: "center" },
-
-  empty: { textAlign: "center", marginTop: 40, color: "#777" },
+  empty: { textAlign: "center", marginTop: 30, color: "#aaa", fontSize: 15 },
 
   logout: {
     margin: 20,
     backgroundColor: "#ef4444",
-    borderRadius: 14,
-    padding: 12,
+    borderRadius: 18,
+    padding: 16,
     alignItems: "center",
     flexDirection: "row",
     justifyContent: "center",
-    gap: 6,
+    gap: 8,
+    marginBottom: 40,
   },
-  logoutText: { color: "#fff", fontWeight: "600" },
+  logoutText: { color: "#fff", fontWeight: "700", fontSize: 16 },
 });

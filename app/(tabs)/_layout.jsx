@@ -39,11 +39,11 @@ export default function TabLayout() {
       />
 
       <Tabs.Screen
-        name="search"
+        name="report"
         options={{
-          title: "ค้นหา",
+          title: "แจ้งสัตว์จร",
           tabBarIcon: ({ color }) => (
-            <Ionicons name="search" size={25} color={color} />
+            <Ionicons name="alert-circle" size={25} color={color} />
           ),
         }}
       />

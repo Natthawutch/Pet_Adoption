@@ -8,9 +8,10 @@ const ADMIN_KEY = "@admin_status";
  */
 export const saveAdminStatus = async (isAdmin) => {
   try {
-    await AsyncStorage.setItem(ADMIN_KEY, JSON.stringify(isAdmin));
+    await AsyncStorage.setItem(ADMIN_KEY, isAdmin ? "true" : "false");
+    console.log("✅ Admin status saved:", isAdmin);
   } catch (error) {
-    console.error("Error saving admin status:", error);
+    console.error("❌ Error saving admin status:", error);
   }
 };
 
@@ -21,9 +22,9 @@ export const saveAdminStatus = async (isAdmin) => {
 export const getAdminStatus = async () => {
   try {
     const value = await AsyncStorage.getItem(ADMIN_KEY);
-    return value !== null ? JSON.parse(value) : false;
+    return value === "true";
   } catch (error) {
-    console.error("Error getting admin status:", error);
+    console.error("❌ Error getting admin status:", error);
     return false;
   }
 };
@@ -34,7 +35,8 @@ export const getAdminStatus = async () => {
 export const clearAdminStatus = async () => {
   try {
     await AsyncStorage.removeItem(ADMIN_KEY);
+    console.log("✅ Admin status cleared");
   } catch (error) {
-    console.error("Error clearing admin status:", error);
+    console.error("❌ Error clearing admin status:", error);
   }
 };
