@@ -1,37 +1,62 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createClient } from "@supabase/supabase-js";
 import Constants from "expo-constants";
-import * as SecureStore from "expo-secure-store";
 import "react-native-url-polyfill/auto";
 
-const supabaseUrl = Constants.expoConfig?.extra?.supabaseUrl;
-const supabaseAnonKey = Constants.expoConfig?.extra?.supabaseAnonKey;
-
-const customStorage = {
-  getItem: async (key) =>
-    (await SecureStore.getItemAsync(key)) || (await AsyncStorage.getItem(key)),
-  setItem: async (key, value) => {
-    await SecureStore.setItemAsync(key, value);
-    await AsyncStorage.setItem(key, value);
-  },
-  removeItem: async (key) => {
-    await SecureStore.deleteItemAsync(key);
-    await AsyncStorage.removeItem(key);
-  },
-};
+const supabaseUrl = Constants.expoConfig.extra.supabaseUrl;
+const supabaseAnonKey = Constants.expoConfig.extra.supabaseAnonKey;
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    storage: customStorage,
-    persistSession: true,
-    autoRefreshToken: true,
+    persistSession: false,
+    autoRefreshToken: false,
     detectSessionInUrl: false,
   },
-  db: { schema: "public" },
 });
 
-export const createClerkSupabaseClient = (clerkToken) =>
-  createClient(supabaseUrl, supabaseAnonKey, {
-    auth: { storage: customStorage },
-    global: { headers: { Authorization: `Bearer ${clerkToken}` } },
+let realtimeClient = null;
+
+export const createClerkSupabaseClient = (clerkToken) => {
+  if (!clerkToken) throw new Error("Missing Clerk token");
+
+  return createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+    global: {
+      headers: {
+        Authorization: `Bearer ${clerkToken}`,
+      },
+    },
   });
+};
+
+export const getRealtimeClient = (clerkToken) => {
+  if (!clerkToken) throw new Error("Missing Clerk token");
+
+  if (!realtimeClient) {
+    realtimeClient = createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+      },
+      realtime: {
+        params: { eventsPerSecond: 10 },
+      },
+    });
+  }
+
+  realtimeClient.realtime.setAuth(clerkToken);
+  return realtimeClient;
+};
+
+export const resetRealtimeClient = () => {
+  if (realtimeClient) {
+    realtimeClient.removeAllChannels();
+    realtimeClient = null;
+  }
+};
+
+export default supabase;

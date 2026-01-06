@@ -128,7 +128,7 @@ export default function Header() {
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: "#b226beff", // สีพีชอ่อนแบบในภาพ
+    backgroundColor: "#8B5CF6", // สีพีชอ่อนแบบในภาพ
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",

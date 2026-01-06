@@ -4,18 +4,18 @@ import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
 import { useEffect, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    Image,
-    KeyboardAvoidingView,
-    Linking,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
+  ActivityIndicator,
+  Alert,
+  Image,
+  KeyboardAvoidingView,
+  Linking,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from "react-native";
 import { createClerkSupabaseClient } from "../../config/supabaseClient";
 
@@ -32,6 +32,7 @@ export default function Report() {
   const [loading, setLoading] = useState(false);
   const [locating, setLocating] = useState(true);
 
+  // ดึงตำแหน่งปัจจุบันเมื่อเปิดหน้า
   useEffect(() => {
     (async () => {
       setLocating(true);
@@ -39,7 +40,7 @@ export default function Report() {
       if (status !== "granted") {
         Alert.alert(
           "ไม่สามารถเข้าถึงตำแหน่งได้",
-          "กรุณาเปิดการเข้าถึงตำแหน่งในการตั้งค่า"
+          "กรุณาเปิดการเข้าถึง GPS ในการตั้งค่า"
         );
         setLocating(false);
         return;
@@ -51,6 +52,7 @@ export default function Report() {
     })();
   }, []);
 
+  // เลือกรูปภาพ
   const pickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -64,55 +66,85 @@ export default function Report() {
     }
   };
 
+  // ฟังก์ชันส่งข้อมูลทั้งหมด
   const handleSubmit = async () => {
     if (!animalType || !image || !location) {
       Alert.alert(
         "ข้อมูลไม่ครบ",
-        "กรุณาเลือกประเภทสัตว์ เพิ่มรูป และระบุตำแหน่ง"
+        "กรุณาเลือกประเภทสัตว์ ถ่ายรูป และรอพิกัด GPS"
       );
       return;
     }
 
     try {
       setLoading(true);
-      const supabase = createClerkSupabaseClient({ getToken });
+      const token = await getToken({ template: "supabase" });
+      const supabase = createClerkSupabaseClient(token);
 
+      // 1. อัปโหลดรูปภาพไปยัง Supabase Storage
       const fileExt = image.uri.split(".").pop();
       const fileName = `${user.id}-${Date.now()}.${fileExt}`;
-      const img = await fetch(image.uri);
-      const blob = await img.blob();
+      const formData = new FormData();
+      formData.append("file", {
+        uri: image.uri,
+        name: fileName,
+        type: `image/${fileExt}`,
+      });
 
       const { error: uploadError } = await supabase.storage
         .from("report-images")
-        .upload(fileName, blob, { contentType: `image/${fileExt}` });
+        .upload(fileName, formData, { contentType: `image/${fileExt}` });
 
       if (uploadError) throw uploadError;
 
-      const { data: publicUrl } = supabase.storage
-        .from("report-images")
-        .getPublicUrl(fileName);
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from("report-images").getPublicUrl(fileName);
 
-      const { error } = await supabase.from("reports").insert({
-        user_id: user.id,
-        animal_type: animalType,
-        detail,
-        image_url: publicUrl.publicUrl,
-        latitude: location.latitude,
-        longitude: location.longitude,
-        status: "pending",
-      });
+      // 2. บันทึกรายงานลงตาราง reports
+      const { data: report, error: reportError } = await supabase
+        .from("reports")
+        .insert({
+          user_id: user.id,
+          animal_type: animalType,
+          location: "ตำแหน่งจาก GPS",
+          detail: detail,
+          image_url: publicUrl,
+          latitude: location.latitude,
+          longitude: location.longitude,
+          status: "pending",
+        })
+        .select()
+        .single();
 
-      if (error) throw error;
+      if (reportError) throw reportError;
 
-      Alert.alert(
-        "สำเร็จ",
-        "เจ้าหน้าที่จะรีบตรวจสอบพิกัด ขอบคุณที่ช่วยเหลือน้องๆ ครับ ❤️"
-      );
+      // 3. แจ้งเตือนอาสาสมัคร (Notifications)
+      const { data: volunteers } = await supabase
+        .from("users")
+        .select("clerk_id")
+        .eq("role", "volunteer");
+
+      if (volunteers?.length > 0) {
+        const notifications = volunteers.map((v) => ({
+          user_id: v.clerk_id,
+          title: "มีเคสใหม่ 🐾",
+          description: `พบ${animalType}: ${detail || "ต้องการความช่วยเหลือ"}`,
+          type: "urgent",
+        }));
+
+        await supabase.from("notifications").insert(notifications);
+      }
+
+      Alert.alert("สำเร็จ", "แจ้งเหตุเรียบร้อย อาสาสมัครกำลังรับทราบ ❤️");
+
+      // ล้างข้อมูลหลังส่งเสร็จ
       setAnimalType("");
       setDetail("");
       setImage(null);
     } catch (err) {
-      Alert.alert("ผิดพลาด", err.message);
+      console.error(err);
+      Alert.alert("เกิดข้อผิดพลาด", err.message);
     } finally {
       setLoading(false);
     }
@@ -129,10 +161,10 @@ export default function Report() {
       >
         <Text style={styles.headerTitle}>แจ้งช่วยเหลือสัตว์</Text>
         <Text style={styles.headerSubtitle}>
-          ระบุรายละเอียดเพื่อให้อาสาเข้าถึงพื้นที่ได้แม่นยำ
+          ระบุรายละเอียดเพื่อให้ความช่วยเหลือรวดเร็วขึ้น
         </Text>
 
-        {/* Upload Section */}
+        {/* ส่วนรูปภาพ */}
         <Pressable
           style={[styles.imageBox, image && styles.imageBoxActive]}
           onPress={pickImage}
@@ -144,12 +176,12 @@ export default function Report() {
               <View style={styles.cameraCircle}>
                 <Ionicons name="camera" size={32} color="#fff" />
               </View>
-              <Text style={styles.uploadText}>กดเพื่อถ่ายรูปหรือเลือกรูป</Text>
+              <Text style={styles.uploadText}>กดเพื่อเลือกรูปภาพ</Text>
             </View>
           )}
         </Pressable>
 
-        {/* Animal Type Section */}
+        {/* ส่วนประเภทสัตว์ */}
         <Text style={styles.sectionLabel}>ประเภทสัตว์</Text>
         <View style={styles.chipGroup}>
           {ANIMAL_OPTIONS.map((type) => (
@@ -170,12 +202,10 @@ export default function Report() {
           ))}
         </View>
 
-        {/* Detail Section */}
-        <Text style={styles.sectionLabel}>
-          รายละเอียด (เช่น อาการบาดเจ็บ, จุดสังเกต)
-        </Text>
+        {/* ส่วนรายละเอียด */}
+        <Text style={styles.sectionLabel}>รายละเอียดเพิ่มเติม</Text>
         <TextInput
-          placeholder="ระบุเพิ่มเติม..."
+          placeholder="ระบุอาการบาดเจ็บ หรือจุดสังเกต..."
           style={[styles.input, styles.textArea]}
           multiline
           value={detail}
@@ -183,57 +213,48 @@ export default function Report() {
           placeholderTextColor="#9ca3af"
         />
 
-        {/* Status Location Section */}
+        {/* ส่วนแสดงตำแหน่ง */}
         <View style={styles.locationContainer}>
           <Ionicons
             name="location"
             size={20}
             color={location ? "#10b981" : "#ef4444"}
           />
-
           {locating ? (
-            <>
+            <View style={styles.row}>
               <Text style={[styles.locationText, { color: "#6b7280" }]}>
-                กำลังดึงตำแหน่ง GPS...
+                กำลังค้นหาตำแหน่ง...
               </Text>
               <ActivityIndicator
                 size="small"
                 color="#6b7280"
                 style={{ marginLeft: 8 }}
               />
-            </>
+            </View>
           ) : location ? (
             <View style={{ flex: 1 }}>
               <Text style={[styles.locationText, { color: "#065f46" }]}>
-                พิกัดที่แจ้ง
+                พิกัด GPS พร้อมแล้ว
               </Text>
-              <Text style={styles.coordText}>
-                Lat: {location.latitude.toFixed(6)}
-              </Text>
-              <Text style={styles.coordText}>
-                Lng: {location.longitude.toFixed(6)}
-              </Text>
-
               <Pressable
                 onPress={() =>
                   Linking.openURL(
-                    `https://www.google.com/maps?q=${location.latitude},${location.longitude}`
+                    `https://www.google.com/maps/search/?api=1&query=${location.latitude},${location.longitude}`
                   )
                 }
                 style={styles.mapLink}
               >
-                <Ionicons name="map" size={14} color="#2563eb" />
-                <Text style={styles.mapLinkText}>ดูตำแหน่งบนแผนที่</Text>
+                <Text style={styles.mapLinkText}>เช็คตำแหน่งบนแผนที่</Text>
               </Pressable>
             </View>
           ) : (
             <Text style={[styles.locationText, { color: "#b91c1c" }]}>
-              ไม่สามารถเข้าถึงพิกัดได้
+              เข้าถึงพิกัดไม่ได้
             </Text>
           )}
         </View>
 
-        {/* Submit Button */}
+        {/* ปุ่มส่งข้อมูล */}
         <Pressable
           style={[
             styles.button,
@@ -246,7 +267,7 @@ export default function Report() {
             <ActivityIndicator color="#fff" />
           ) : (
             <>
-              <Text style={styles.buttonText}>ส่งรายงาน</Text>
+              <Text style={styles.buttonText}>ส่งข้อมูล</Text>
               <Ionicons
                 name="send"
                 size={18}
@@ -298,10 +319,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 10,
-    shadowColor: "#ef4444",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 5,
   },
   uploadText: { color: "#6b7280", fontWeight: "600" },
   sectionLabel: {
@@ -341,6 +358,13 @@ const styles = StyleSheet.create({
     marginBottom: 25,
   },
   locationText: { marginLeft: 8, fontWeight: "600", fontSize: 14 },
+  row: { flexDirection: "row", alignItems: "center" },
+  mapLink: { marginTop: 4, marginLeft: 8 },
+  mapLinkText: {
+    color: "#2563eb",
+    fontSize: 12,
+    textDecorationLine: "underline",
+  },
   button: {
     backgroundColor: "#ef4444",
     height: 56,
@@ -348,31 +372,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#ef4444",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 5,
   },
-  coordText: {
-    fontSize: 13,
-    color: "#065f46",
-    marginLeft: 28,
-    marginTop: 2,
-  },
-  mapLink: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginLeft: 28,
-    marginTop: 6,
-  },
-  mapLinkText: {
-    marginLeft: 4,
-    fontSize: 13,
-    color: "#2563eb",
-    fontWeight: "600",
-  },
-
   buttonDisabled: { backgroundColor: "#fda4af" },
   buttonText: { color: "#fff", fontWeight: "700", fontSize: 18 },
 });

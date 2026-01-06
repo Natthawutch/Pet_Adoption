@@ -22,53 +22,38 @@ export default function AuthWrapper({ children }) {
         return;
       }
 
-      try {
-        console.log("🔍 User ID:", user.id);
+      const token = await getToken({ template: "supabase" });
+      const supabase = createClerkSupabaseClient(token);
 
-        const token = await getToken({ template: "supabase" });
-        console.log("🔍 Token:", token ? "exists" : "null");
+      const { data, error } = await supabase
+        .from("users")
+        .select("role")
+        .eq("clerk_id", user.id)
+        .single();
 
-        const supabase = createClerkSupabaseClient(token);
-
-        // ลอง query ทั้งหมดก่อน
-        const { data: allUsers, error: allError } = await supabase
-          .from("users")
-          .select("*");
-
-        console.log("🔍 ALL USERS:", allUsers, allError);
-
-        // query ตามปกติ
-        const { data, error } = await supabase
-          .from("users")
-          .select("role")
-          .eq("clerk_id", user.id)
-          .single();
-
-        console.log("🔍 Query result:", { data, error, userId: user.id });
-
-        if (error || !data?.role) {
-          console.log("❌ Role not found", error);
-          router.replace("/login");
-          return;
-        }
-
-        const role = data.role;
-        await saveUserRole(role);
-
-        console.log("✅ USER ROLE:", role);
-
-        if (role === "admin") {
-          router.replace("/admin/dashboard");
-        } else if (role === "volunteer") {
-          router.replace("/volunteer");
-        } else {
-          router.replace("/(tabs)/home");
-        }
-      } catch (e) {
-        console.error("❌ AuthWrapper error:", e);
-      } finally {
-        setLoading(false);
+      if (error || !data?.role) {
+        router.replace("/login");
+        return;
       }
+
+      const role = data.role;
+      await saveUserRole(role);
+
+      const currentGroup = segments[0];
+
+      if (role === "admin" && currentGroup !== "admin") {
+        router.replace("/admin/dashboard");
+      }
+
+      if (role === "volunteer" && currentGroup !== "volunteer") {
+        router.replace("/volunteer");
+      }
+
+      if (role === "user" && currentGroup !== "(tabs)") {
+        router.replace("/(tabs)/home");
+      }
+
+      setLoading(false);
     };
 
     checkRoleAndRedirect();
