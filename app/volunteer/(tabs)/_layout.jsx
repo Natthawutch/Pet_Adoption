@@ -2,8 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Redirect, Tabs } from "expo-router";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, View } from "react-native";
-import { getUserRole } from "../../utils/roleStorage";
-
+import { getUserRole } from "../../../utils/roleStorage";
 export default function VolunteerTabsLayout() {
   const [role, setRole] = useState(null);
 

@@ -1,7 +1,6 @@
 import { Redirect } from "expo-router";
 import { useEffect, useState } from "react";
-import { getUserRole } from "../app/utils/roleStorage";
-
+import { getUserRole } from "../utils/roleStorage";
 export default function AdminGuard({ children }) {
   const [role, setRole] = useState(null);
 

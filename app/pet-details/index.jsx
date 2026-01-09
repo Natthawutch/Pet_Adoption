@@ -121,15 +121,44 @@ export default function PetDetails() {
       return;
     }
 
-    animateButton();
+    if (user.id === pet.user_id) {
+      Alert.alert("คุณเป็นเจ้าของสัตว์ตัวนี้");
+      return;
+    }
+
     setIsLoading(true);
 
     try {
-      router.push({
-        pathname: "/chat",
-        params: { id: `${user.id}_${pet.user_id}` },
-      });
-    } catch {
+      const token = await getToken({ template: "supabase" });
+      const supabaseAuth = createClerkSupabaseClient(token);
+
+      // ✅ สร้าง chatId เอง (สำคัญที่สุด)
+      const chatId = [user.id, pet.user_id].sort().join("_");
+
+      // 1️⃣ เช็คว่ามี chat นี้แล้วไหม
+      const { data: existingChat } = await supabaseAuth
+        .from("chats")
+        .select("id")
+        .eq("id", chatId)
+        .maybeSingle();
+
+      // 2️⃣ ถ้าไม่มี → create (ต้องส่ง id)
+      if (!existingChat) {
+        const { error } = await supabaseAuth.from("chats").insert({
+          id: chatId, // ✅ ห้ามลืม
+          user1_id: user.id,
+          user2_id: pet.user_id,
+          last_message: "",
+          last_message_at: new Date().toISOString(),
+        });
+
+        if (error) throw error;
+      }
+
+      // 3️⃣ เข้า chat
+      router.push(`/chat/${chatId}`);
+    } catch (err) {
+      console.error("InitiateChat error:", err);
       Alert.alert("ไม่สามารถเริ่มแชทได้");
     } finally {
       setIsLoading(false);
@@ -169,7 +198,7 @@ export default function PetDetails() {
         />
         <PetSubInfo pet={pet} />
         <AboutPet pet={pet} />
-        <OwnerInfo pet={pet} />
+        <OwnerInfo pet={pet} onMessagePress={InitiateChat} />
         <View style={{ height: 120 }} />
       </ScrollView>
 

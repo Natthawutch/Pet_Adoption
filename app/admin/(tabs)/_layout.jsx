@@ -1,8 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
 import { StyleSheet, Text, View } from "react-native";
+// ลองเช็คดูว่าโฟลเดอร์ components ของคุณอยู่ระดับเดียวกับ app หรือไม่
 import AdminGuard from "../../../components/AdminGuard";
-
 function AdminTabsLayout() {
   const notificationCount = 5;
 

@@ -1,12 +1,6 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useState } from "react";
-import {
-  Image,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View
-} from "react-native";
+import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import Colors from "../../constants/Colors";
 
 export default function OwnerInfo({ pet, onMessagePress }) {
@@ -65,6 +59,7 @@ export default function OwnerInfo({ pet, onMessagePress }) {
         style={styles.messageButton}
         onPress={onMessagePress}
         activeOpacity={0.7}
+        disabled={!onMessagePress}
       >
         <Ionicons name="chatbox-ellipses" size={20} color="white" />
         <Text style={styles.messageText}>Message</Text>

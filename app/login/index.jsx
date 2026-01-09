@@ -1,7 +1,7 @@
 import { useAuth, useOAuth, useSignIn } from "@clerk/clerk-expo";
 import { Link, useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -31,12 +31,16 @@ export default function SignInScreen() {
     strategy: "oauth_google",
   });
 
+  // 🚀 ถ้า already signed in → redirect
+  useEffect(() => {
+    if (isLoaded && isSignedIn) {
+      router.replace("/(tabs)/home"); // หรือ route ตาม role
+    }
+  }, [isLoaded, isSignedIn]);
+
   /* ---------------- EMAIL LOGIN ---------------- */
   const onSignInPress = async () => {
-    if (!isLoaded || isSignedIn) {
-      Alert.alert("แจ้งเตือน", "คุณเข้าสู่ระบบอยู่แล้ว");
-      return;
-    }
+    if (!isLoaded || isSignedIn) return;
 
     if (!emailAddress || !password) {
       Alert.alert("แจ้งเตือน", "กรุณากรอกอีเมลและรหัสผ่าน");
@@ -53,10 +57,10 @@ export default function SignInScreen() {
 
       if (result.status === "complete") {
         await setActive({ session: result.createdSessionId });
-        // ✅ AuthWrapper จะจัดการ redirect ให้อัตโนมัติ
+        // ✅ AuthWrapper จะ redirect ให้เอง
       }
     } catch (err) {
-      console.error("❌ Sign in error:", err);
+      console.error("Sign in error:", err);
       Alert.alert(
         "เข้าสู่ระบบไม่สำเร็จ",
         err.errors?.[0]?.message || "อีเมลหรือรหัสผ่านไม่ถูกต้อง"
@@ -68,25 +72,21 @@ export default function SignInScreen() {
 
   /* ---------------- GOOGLE LOGIN ---------------- */
   const handleGoogleLogin = async () => {
-    if (isSignedIn) {
-      Alert.alert("แจ้งเตือน", "คุณเข้าสู่ระบบอยู่แล้ว");
-      return;
-    }
+    if (isSignedIn) return;
 
     try {
       const { createdSessionId, setActive } = await startGoogleOAuth();
 
       if (createdSessionId) {
         await setActive({ session: createdSessionId });
-        // ✅ AuthWrapper จะจัดการ redirect ให้อัตโนมัติ
+        // ✅ AuthWrapper จะ redirect ให้เอง
       }
     } catch (err) {
-      console.error("❌ Google OAuth error:", err);
+      console.error("Google OAuth error:", err);
       Alert.alert("เข้าสู่ระบบไม่สำเร็จ", "กรุณาลองใหม่อีกครั้ง");
     }
   };
 
-  /* ---------------- UI ---------------- */
   return (
     <KeyboardAvoidingView
       style={styles.container}
@@ -147,11 +147,7 @@ export default function SignInScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#fff" },
-  scrollContent: {
-    flexGrow: 1,
-    justifyContent: "center",
-    padding: 24,
-  },
+  scrollContent: { flexGrow: 1, justifyContent: "center", padding: 24 },
   title: {
     fontSize: 28,
     fontWeight: "700",

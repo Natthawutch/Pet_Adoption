@@ -9,8 +9,8 @@ import {
   Text,
   View,
 } from "react-native";
-import { clearAdminStatus } from "../../utils/adminStorage";
-
+// ถอยออกจาก (tabs) -> ถอยออกจาก admin -> ถอยออกจาก app -> เข้าไปที่ utils
+import { clearAdminStatus } from "../../../utils/adminStorage";
 export default function AdminProfile() {
   const { user } = useUser();
   const { signOut } = useAuth();

@@ -33,34 +33,6 @@ export default function AboutPet({ pet }) {
           </Text>
         </View>
       )}
-
-      {/* สถานะการโพสต์ */}
-      {pet.post_status && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>📋 สถานะ</Text>
-          <View
-            style={[
-              styles.statusBadge,
-              pet.post_status === "Available" && styles.statusAvailable,
-              pet.post_status === "Pending" && styles.statusPending,
-              pet.post_status === "Adopted" && styles.statusAdopted,
-            ]}
-          >
-            <Text
-              style={[
-                styles.statusText,
-                pet.post_status === "Available" && { color: "#10B981" },
-                pet.post_status === "Pending" && { color: "#F59E0B" },
-                pet.post_status === "Adopted" && { color: "#EF4444" },
-              ]}
-            >
-              {pet.post_status === "Available" && "🟢 พร้อมหาบ้าน"}
-              {pet.post_status === "Pending" && "🟡 รอพิจารณา"}
-              {pet.post_status === "Adopted" && "🔴 หาบ้านแล้ว"}
-            </Text>
-          </View>
-        </View>
-      )}
     </View>
   );
 }

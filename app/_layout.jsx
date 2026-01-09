@@ -29,7 +29,8 @@ export default function RootLayout() {
 
   return (
     <ClerkWrapper>
-      <AuthWrapper /> {/* ✅ ใช้ AuthWrapper จัดการ auth flow */}
+      {/* ✅ ใช้ AuthWrapper จัดการ auth flow  */}
+      <AuthWrapper /> 
       <StatusBar style="dark" />
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="index" />
@@ -39,7 +40,6 @@ export default function RootLayout() {
         <Stack.Screen name="admin" />
         <Stack.Screen name="add-new-pet/index" />
         <Stack.Screen name="pet-details/index" />
-        <Stack.Screen name="chat/index" />
         <Stack.Screen name="Favorite/favorite" />
         <Stack.Screen name="Inbox/inbox" />
         <Stack.Screen name="user-post/index" />
